@@ -1,3 +1,6 @@
+# I will ignore pubspec.lock for now and check it in later if needed
+cunda_flutter/pubspec.lock
+
 # FLUTTER_RUST_BRIDGE_CODEGEN generated .gitignore
 
 # Miscellaneous
