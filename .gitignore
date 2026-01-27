@@ -1,6 +1,16 @@
+# flutter_rust_bridge generated paths: ignore them during
+# the development process and maybe check them in once they
+# are really stable.
+cunda_flutter/lib/frb_generated
+**/frb_generated.rs
+
+**/target/
+
 # I will ignore .lock files for now and check it in later if needed
 cunda_flutter/pubspec.lock
 cunda_flutter/rust/Cargo.lock
+protocol/Cargo.lock
+frb_prpc_juggle/Cargo.lock
 
 # FLUTTER_RUST_BRIDGE_CODEGEN generated .gitignore
 

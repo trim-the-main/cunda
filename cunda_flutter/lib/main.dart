@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cunda_flutter/src/rust/api/simple.dart';
-import 'package:cunda_flutter/src/rust/frb_generated.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/frb_generated.dart';
 
 Future<void> main() async {
   await RustLib.init();
@@ -15,11 +14,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(title: const Text('flutter_rust_bridge quickstart')),
-        body: Center(
-          child: Text(
-            'Action: Call Rust `greet("Tom")`\nResult: `${greet(name: "Tom")}`',
-          ),
-        ),
+        body: Center(child: Text('Quick start')),
       ),
     );
   }
