@@ -1,0 +1,125 @@
+import 'dart:async';
+
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc/client.dart';
+import 'package:cunda_flutter/providers/ble/ble_providers.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:logging/logging.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
+
+part 'client.g.dart';
+
+final log = Logger('RpcClientProvider');
+
+enum RpcUuid {
+  service(uuidStr: '408813DF-5DD4-1F87-EC11-CDB001100000'),
+  toServer(
+    uuidStr: '408813df-5dd4-1f87-ec11-cdb001100001',
+  ), // to microcontroller
+  toClient(uuidStr: '408813df-5dd4-1f87-ec11-cdb001100002'); // to us
+
+  final String uuidStr;
+
+  const RpcUuid({required this.uuidStr});
+
+  Guid get guidValue => Guid(uuidStr);
+}
+
+class NotRpcDeviceException implements Exception {
+  final RpcUuid notFound;
+
+  NotRpcDeviceException({required this.notFound});
+}
+
+Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
+  log.fine("Setting up the Rpc client");
+  final services = await device.discoverServices();
+  log.fine("discovered services");
+  final List<BluetoothCharacteristic> rpcServiceCharacteristics;
+  try {
+    rpcServiceCharacteristics = services
+        .where((s) => s.serviceUuid == RpcUuid.service.guidValue)
+        .single
+        .characteristics;
+  } on StateError {
+    log.warning("No Rpc service: {}", services);
+    throw NotRpcDeviceException(notFound: RpcUuid.service);
+  }
+
+  BluetoothCharacteristic toServer;
+  log.fine("List of characteristics: $rpcServiceCharacteristics");
+  try {
+    toServer = rpcServiceCharacteristics
+        .where((c) => c.characteristicUuid == RpcUuid.toServer.guidValue)
+        .single;
+  } on StateError {
+    log.warning("No characteristic with UUID rpcToServerCharUuid");
+    throw NotRpcDeviceException(notFound: RpcUuid.toServer);
+  }
+  BluetoothCharacteristic toClient;
+  try {
+    toClient = rpcServiceCharacteristics
+        .where((c) => c.characteristicUuid == RpcUuid.toClient.guidValue)
+        .single;
+  } on StateError {
+    log.warning("No characteristic with UUID rpcToServerCharUuid");
+    throw NotRpcDeviceException(notFound: RpcUuid.toClient);
+  }
+
+  log.fine("Creating Rpc client");
+  final client = FlutterClient();
+
+  // Send data to rust ffi using the callback
+  // It is important we wait for completion of the rxCallback,
+  // otherwise the data may reach out of order. There shouldn't be
+  // a second Future in flight before the first one completes.
+  final rxStreamSub = toClient.onValueReceived.listen((data) async {
+    await client.rxCallback(data: data);
+  });
+  device.cancelWhenDisconnected(rxStreamSub);
+
+  // Data coming from the rust ffi uses the stream api
+  // In flutter rust bridge, the generated code for function/method
+  // calls usually have the same signature except when we're dealing
+  // with streams. Here client.init() on the flutter side returns
+  // a Stream, however on the rust end the function signature is
+  // different and `init` method takes in a StreamSink argument. So
+  // long story short the stream is not generated in the rust code that
+  // we write but rather in the flutter_rust_bridge generated code.
+  final txStreamSub = client.init().listen((data) async {
+    await toServer.write(data);
+  });
+  device.cancelWhenDisconnected(txStreamSub);
+
+  if (!toClient.isNotifying) {
+    log.fine("notifications are not on so we are turning them on");
+    await toClient.setNotifyValue(true);
+  }
+  return client;
+}
+
+// Rpc client provider
+// We create rpc client object with keepAlive:true so that even if the
+// widgets don't need the client anymore we keep it alive. This doesn't
+// mean we keep it alive forever, we dispose it when the device disconnects.
+@Riverpod(keepAlive: true)
+FutureOr<FlutterClient> rpcClient(Ref ref, BluetoothDevice device) async {
+  log.fine("Creating rpc client");
+
+  // Depend on the connected device so if the device disconnects
+  // for reasons external to us we simply dispose the client and
+  // start over.
+  final connDevice = await ref.watch(
+    connectedBluetoothDeviceProvider(device).future,
+  );
+
+  final client = await _createRpcClientFor(connDevice);
+  ref.onDispose(() {
+    log.fine("Disposing rpc client");
+    client.dispose(); // calls drop on the rust side
+  });
+  ref.onCancel(() {
+    log.fine("Canceling rpcClient");
+  });
+
+  return client;
+}
