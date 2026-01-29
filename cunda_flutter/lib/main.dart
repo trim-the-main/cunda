@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:logging/logging.dart';
 
-final log = Logger('CundaMain');
+final _log = Logger('CundaMain');
 
 Future<void> main() async {
   Logger.root.level = Level.FINE; // defaults to Level.INFO

@@ -9,9 +9,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logging/logging.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
 
-import 'constants.dart';
+import 'package:cunda_flutter/constants.dart';
 
-final log = Logger('ScannerPage');
+final _log = Logger('ScannerPage');
 
 // This page is responsible for scanning, connecting and navigating between
 // different ble devices
@@ -141,13 +141,11 @@ class ScanResultCard extends StatelessWidget {
 
   void _connectCb(BuildContext context) async {
     if (device.isDisconnected) {
-      log.fine("Initiating connect on ${device.chosenName}");
+      _log.fine("Initiating connect on ${device.chosenName}");
       try {
-        await device.connectTrackingTransitionState(
-          timeout: connectTimeout,
-        );
+        await device.connectTrackingTransitionState(timeout: connectTimeout);
       } catch (e) {
-        log.severe("Error connecting to device: $e");
+        _log.severe("Error connecting to device: $e");
         if (context.mounted) {
           await showDialog(
             context: context,
@@ -173,7 +171,7 @@ class ScanResultCard extends StatelessWidget {
   }
 
   void _openCb(BuildContext context) {
-    log.fine("openning connection");
+    _log.fine("openning connection");
     MaterialPageRoute route = MaterialPageRoute(
       builder: (context) => DevicePage(device: device),
       settings: RouteSettings(name: '/connection'),

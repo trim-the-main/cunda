@@ -1,15 +1,17 @@
 import 'dart:async';
 
+import 'package:cunda_flutter/constants.dart';
 import 'package:cunda_flutter/services/ble/ble.dart';
 import 'package:cunda_flutter/services/ble/ble_fbp_impl.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
+import 'package:cunda_flutter/utils/riverpod_utils.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:logging/logging.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'ble_providers.g.dart';
 
-final log = Logger('BleProviders');
+final _log = Logger('BleProviders');
 
 @riverpod
 BleService bleService(Ref ref) {
@@ -35,7 +37,7 @@ class BluetoothAdapterOn extends _$BluetoothAdapterOn {
   bool build() {
     final bleAdapterService = ref.read(bleAdapterServiceProvider);
     ref.onDispose(() {
-      log.fine("Disposing adapter on provider");
+      _log.fine("Disposing adapter on provider");
       _adapterStateSub?.cancel();
       _adapterStateSub = null;
     });
@@ -124,26 +126,48 @@ bool isThisDeviceConnected(Ref ref, BluetoothDevice device) {
   return device.isConnected;
 }
 
-@Riverpod(keepAlive: true)
+@Riverpod(keepAlive: true, retry: retryOnce)
 FutureOr<BluetoothDevice> connectedBluetoothDevice(
   Ref ref,
   BluetoothDevice device,
 ) async {
-  log.fine("Rebuilding connectedDeviceProvider");
+  _log.fine("Rebuilding connectedDeviceProvider");
+
+  if (!ref.read(bluetoothAdapterOnProvider)) {
+    throw NoNeedToRetry("Bluetooth adapter is off");
+  }
+
   if (device.isDisconnected) {
-    await device.connectTrackingTransitionState();
+    await device.connectTrackingTransitionState(timeout: connectTimeout);
   }
 
   final sub = device.connectionState.listen((connState) {
     if (connState == BluetoothConnectionState.disconnected) {
-      log.fine("Device disconnected");
+      _log.fine("Device disconnected");
       ref.invalidateSelf();
     }
   });
   ref.onDispose(sub.cancel);
   ref.onDispose(() {
-    log.fine("Disposing connectedDeviceProvider");
+    _log.fine("Disposing connectedDeviceProvider");
   });
 
   return device;
+}
+
+// Helper stream providers from riverpod. They are handy because
+// riverpod helps managing the subscriptions to these easily. We
+// don't need a stateful widget to keep the subscription so that we
+// cancel it when we dispose the widget. ref.listen or ref.watch
+// automatically handles that for us.
+
+@riverpod
+Stream<int> rssiStream(Ref ref, BluetoothDevice device) async* {
+  _log.fine("RSSI stream provider restarting");
+  yield* device.rssiStream(Duration(seconds: 2));
+}
+
+@riverpod
+Stream<int> mtuStream(Ref ref, BluetoothDevice device) async* {
+  yield* device.mtu;
 }

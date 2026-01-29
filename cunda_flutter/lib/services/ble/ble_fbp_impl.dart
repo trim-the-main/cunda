@@ -1,5 +1,9 @@
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:cunda_flutter/services/ble/ble.dart';
+import 'package:logging/logging.dart';
+
+// ignore: unused_element
+final _log = Logger('BleServiceFBP');
 
 class BleServiceFBP implements BleService {
   @override

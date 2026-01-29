@@ -11,7 +11,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'protocol.g.dart';
 
-final log = Logger('ProtocolProvider');
+final _log = Logger('ProtocolProvider');
 
 @Riverpod(keepAlive: true, retry: noRetry)
 FutureOr<EndpointDispatcher> endpointDispatcher(
@@ -46,18 +46,15 @@ Stream<(DateTime, ButtonEvent)> gpioButtonEvents(
 
   eDispatcher.startButtonEventsTopic(req: NoArg());
   ref.onCancel(() {
-    log.warning("Stop button events stream, we got canceled");
+    _log.warning("Stop button events stream, we got canceled");
     eDispatcher.stopButtonEventsTopic(req: NoArg());
   });
   ref.onResume(() {
-    log.warning("Resume button events stream");
+    _log.warning("Resume button events stream");
     eDispatcher.startButtonEventsTopic(req: NoArg());
   });
-  ref.onDispose(() {
-    log.severe("BUTTON EVENT STREAM IS GOING AWAY");
-  });
   await for (final event in buttonEventsStream) {
-    log.fine("Yielding button event: $event");
+    _log.fine("Yielding button event: $event");
     yield (DateTime.now(), event);
   }
 }
@@ -69,7 +66,7 @@ class SystemSettings extends _$SystemSettings {
     final eDispatcher = await ref.watch(
       endpointDispatcherProvider(device).future,
     );
-    log.fine("Calling getSysSettings");
+    _log.fine("Calling getSysSettings");
     return eDispatcher.getSysSettings(req: NoArg());
   }
 
@@ -94,7 +91,7 @@ class ApplicationSettings extends _$ApplicationSettings {
     final eDispatcher = await ref.watch(
       endpointDispatcherProvider(device).future,
     );
-    log.fine("Calling getApplSettings");
+    _log.fine("Calling getApplSettings");
     return eDispatcher.getApplSettings(req: NoArg());
   }
 

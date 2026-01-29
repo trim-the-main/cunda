@@ -2,13 +2,14 @@ import 'dart:async';
 
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc/client.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
+import 'package:cunda_flutter/utils/riverpod_utils.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:logging/logging.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'client.g.dart';
 
-final log = Logger('RpcClientProvider');
+final _log = Logger('RpcClientProvider');
 
 enum RpcUuid {
   service(uuidStr: '408813DF-5DD4-1F87-EC11-CDB001100000'),
@@ -31,9 +32,9 @@ class NotRpcDeviceException implements Exception {
 }
 
 Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
-  log.fine("Setting up the Rpc client");
+  _log.fine("Setting up the Rpc client");
   final services = await device.discoverServices();
-  log.fine("discovered services");
+  _log.fine("discovered services");
   final List<BluetoothCharacteristic> rpcServiceCharacteristics;
   try {
     rpcServiceCharacteristics = services
@@ -41,18 +42,18 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
         .single
         .characteristics;
   } on StateError {
-    log.warning("No Rpc service: {}", services);
+    _log.warning("No Rpc service: {}", services);
     throw NotRpcDeviceException(notFound: RpcUuid.service);
   }
 
   BluetoothCharacteristic toServer;
-  log.fine("List of characteristics: $rpcServiceCharacteristics");
+  _log.fine("List of characteristics: $rpcServiceCharacteristics");
   try {
     toServer = rpcServiceCharacteristics
         .where((c) => c.characteristicUuid == RpcUuid.toServer.guidValue)
         .single;
   } on StateError {
-    log.warning("No characteristic with UUID rpcToServerCharUuid");
+    _log.warning("No characteristic with UUID rpcToServerCharUuid");
     throw NotRpcDeviceException(notFound: RpcUuid.toServer);
   }
   BluetoothCharacteristic toClient;
@@ -61,11 +62,11 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
         .where((c) => c.characteristicUuid == RpcUuid.toClient.guidValue)
         .single;
   } on StateError {
-    log.warning("No characteristic with UUID rpcToServerCharUuid");
+    _log.warning("No characteristic with UUID rpcToServerCharUuid");
     throw NotRpcDeviceException(notFound: RpcUuid.toClient);
   }
 
-  log.fine("Creating Rpc client");
+  _log.fine("Creating Rpc client");
   final client = FlutterClient();
 
   // Send data to rust ffi using the callback
@@ -91,7 +92,7 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
   device.cancelWhenDisconnected(txStreamSub);
 
   if (!toClient.isNotifying) {
-    log.fine("notifications are not on so we are turning them on");
+    _log.fine("notifications are not on so we are turning them on");
     await toClient.setNotifyValue(true);
   }
   return client;
@@ -101,24 +102,24 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
 // We create rpc client object with keepAlive:true so that even if the
 // widgets don't need the client anymore we keep it alive. This doesn't
 // mean we keep it alive forever, we dispose it when the device disconnects.
-@Riverpod(keepAlive: true)
+@Riverpod(keepAlive: true, retry: noRetry)
 FutureOr<FlutterClient> rpcClient(Ref ref, BluetoothDevice device) async {
-  log.fine("Creating rpc client");
+  _log.fine("Creating rpc client");
 
   // Depend on the connected device so if the device disconnects
   // for reasons external to us we simply dispose the client and
-  // start over.
+  // start over. This will wait until the device is reconnected.
   final connDevice = await ref.watch(
     connectedBluetoothDeviceProvider(device).future,
   );
 
   final client = await _createRpcClientFor(connDevice);
   ref.onDispose(() {
-    log.fine("Disposing rpc client");
+    _log.fine("Disposing rpc client");
     client.dispose(); // calls drop on the rust side
   });
   ref.onCancel(() {
-    log.fine("Canceling rpcClient");
+    _log.fine("Canceling rpcClient");
   });
 
   return client;
