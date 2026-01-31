@@ -27,3 +27,8 @@ abstract class BleScanner {
 }
 
 abstract class BleService implements BleAdapter, BleScanner {}
+
+class ConnectionLost implements Exception {
+  @override
+  String toString() => 'Connection Lost';
+}

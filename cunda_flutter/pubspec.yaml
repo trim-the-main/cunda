@@ -56,8 +56,9 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   integration_test:
     sdk: flutter
-  build_runner: ^2.9.0
+  build_runner: ^2.10.5
   riverpod_generator: ^4.0.0+1
+  mockito: ^5.6.3
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 

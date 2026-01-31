@@ -78,7 +78,7 @@ class DeviceListWidget extends ConsumerWidget {
         if (context.mounted) {
           await ref
               .read(bleScannerServiceProvider)
-              .startScan(timeout: scanTimeout);
+              .startScan(timeout: Constants.scanTimeout);
         }
       },
     );
@@ -103,7 +103,7 @@ class ScanFloatingActionButton extends ConsumerWidget {
     } else {
       return FloatingActionButton.extended(
         onPressed: () {
-          bleScanner.startScan(timeout: scanTimeout);
+          bleScanner.startScan(timeout: Constants.scanTimeout);
         },
         icon: Icon(Icons.refresh),
         label: Text("Scan"),
@@ -134,16 +134,19 @@ class DeviceList extends ConsumerWidget {
   }
 }
 
-class ScanResultCard extends StatelessWidget {
+class ScanResultCard extends ConsumerWidget {
   final BluetoothDevice device;
   final int? rssi;
   const ScanResultCard(this.device, {super.key, this.rssi});
 
-  void _connectCb(BuildContext context) async {
-    if (device.isDisconnected) {
+  void _connectCb(BuildContext context, WidgetRef ref) async {
+    final connState = ref.watch(connectionManagerProvider(device));
+    final connManager = ref.read(connectionManagerProvider(device).notifier);
+
+    if (connState == ConnectionTransitionState.disconnected) {
       _log.fine("Initiating connect on ${device.chosenName}");
       try {
-        await device.connectTrackingTransitionState(timeout: connectTimeout);
+        await connManager.connectWithReconnect(1);
       } catch (e) {
         _log.severe("Error connecting to device: $e");
         if (context.mounted) {
@@ -180,40 +183,42 @@ class ScanResultCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final connState = ref.watch(connectionManagerProvider(device));
+    final connManager = ref.read(connectionManagerProvider(device).notifier);
+
     return Padding(
       padding: const EdgeInsets.all(4.0),
       child: Card(
         child: ListTile(
           leading: ConnectionStatusIcon(device: device),
           title: Text(device.chosenName),
-          subtitle: ValueListenableBuilder(
-            valueListenable: device.transitionState,
-            builder: (context, value, child) =>
-                _deviceConnectionStateLabel(value),
-          ),
-          trailing: ValueListenableBuilder(
-            valueListenable: device.transitionState,
-            builder: (context, value, child) {
-              if (value != ConnectionTransition.noTransition) {
-                return CircularProgressIndicator();
-              } else {
-                if (device.isDisconnected) {
-                  return _connectButton(context);
-                } else {
-                  return _disconnectButton(context);
-                }
-              }
-            },
-          ),
+          subtitle: _deviceConnectionStateLabel(connState),
+          trailing: switch (connState) {
+            ConnectionTransitionState.connecting ||
+            ConnectionTransitionState.disconnecting =>
+              CircularProgressIndicator(),
+            ConnectionTransitionState.disconnected => _connectButton(
+              context,
+              ref,
+            ),
+            ConnectionTransitionState.connected => _disconnectButton(
+              context,
+              ref,
+            ),
+          },
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10.0),
           ),
           onTap: () {
-            if (device.isConnected) {
-              _openCb(context);
-            } else {
-              _connectCb(context);
+            switch (connState) {
+              case ConnectionTransitionState.connected:
+                _openCb(context);
+              case ConnectionTransitionState.disconnected:
+                _connectCb(context, ref);
+              case ConnectionTransitionState.connecting:
+              case ConnectionTransitionState.disconnecting:
+                break;
             }
           },
         ),
@@ -221,30 +226,30 @@ class ScanResultCard extends StatelessWidget {
     );
   }
 
-  Widget _connectButton(BuildContext context) {
+  Widget _connectButton(BuildContext context, WidgetRef ref) {
     return TextButton(
       child: Text("Connect"),
-      onPressed: () => _connectCb(context),
+      onPressed: () => _connectCb(context, ref),
     );
   }
 
-  Widget _disconnectButton(BuildContext context) {
+  Widget _disconnectButton(BuildContext context, WidgetRef ref) {
     return TextButton(
       child: Text("Disconnect"),
-      onPressed: () => _disconnectCb(context),
+      onPressed: () => _disconnectCb(context, ref),
     );
   }
 
-  Text _deviceConnectionStateLabel(ConnectionTransition transitionState) {
+  Text _deviceConnectionStateLabel(ConnectionTransitionState transitionState) {
     switch (transitionState) {
-      case ConnectionTransition.connecting:
+      case ConnectionTransitionState.connecting:
         return Text("Connecting...");
-      case ConnectionTransition.disconnecting:
+      case ConnectionTransitionState.disconnecting:
         return Text("Disconnecting...");
-      case ConnectionTransition.noTransition:
-        if (device.isConnected) {
-          return Text("Connected");
-        } else {
+      case ConnectionTransitionState.connected:
+        return Text("Connected");
+      case ConnectionTransitionState.disconnected:
+        {
           if (rssi != null) {
             return Text(
               "Available, Signal: ${SignalStrength.fromRssiValue(rssi!).toString()}",
@@ -255,8 +260,8 @@ class ScanResultCard extends StatelessWidget {
     }
   }
 
-  void _disconnectCb(BuildContext context) async {
-    return await device.disconnectTrackingTransitionState();
+  void _disconnectCb(BuildContext context, WidgetRef ref) async {
+    ref.read(connectionManagerProvider(device).notifier).disconnect();
   }
 }
 

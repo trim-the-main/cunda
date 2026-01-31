@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:cunda_flutter/providers/rpc/protocol.dart';
+import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -151,8 +152,9 @@ class _GpioSectionState extends ConsumerState<GpioSection> {
             );
           },
           error: (Object error, StackTrace stackTrace) {
-            Navigator.of(context).pop();
-            return Text("Error getting endpoint dispatcher");
+            return Text(
+              "Error establising connection to ${widget.device.chosenName}",
+            );
           },
           loading: () => Center(child: CircularProgressIndicator()),
         );

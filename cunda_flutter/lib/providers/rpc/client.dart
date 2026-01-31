@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc/client.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
+import 'package:cunda_flutter/services/ble/ble.dart';
 import 'package:cunda_flutter/utils/riverpod_utils.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:logging/logging.dart';
@@ -106,14 +107,14 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
 FutureOr<FlutterClient> rpcClient(Ref ref, BluetoothDevice device) async {
   _log.fine("Creating rpc client");
 
-  // Depend on the connected device so if the device disconnects
-  // for reasons external to us we simply dispose the client and
-  // start over. This will wait until the device is reconnected.
-  final connDevice = await ref.watch(
-    connectedBluetoothDeviceProvider(device).future,
-  );
+  // We will be notified when connectionManager state changes. If disconnected we
+  // should not continue.
+  if (ref.watch(connectionManagerProvider(device)) ==
+      ConnectionTransitionState.disconnected) {
+    throw ConnectionLost();
+  }
 
-  final client = await _createRpcClientFor(connDevice);
+  final client = await _createRpcClientFor(device);
   ref.onDispose(() {
     _log.fine("Disposing rpc client");
     client.dispose(); // calls drop on the rust side

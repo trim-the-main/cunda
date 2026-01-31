@@ -6,6 +6,7 @@ import 'package:cunda_flutter/services/ble/ble_fbp_impl.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
 import 'package:cunda_flutter/utils/riverpod_utils.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:flutter_riverpod/misc.dart';
 import 'package:logging/logging.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -117,49 +118,123 @@ class BleScannedDevices extends _$BleScannedDevices {
   }
 }
 
+enum ConnectionTransitionState {
+  connected,
+  connecting,
+  disconnecting,
+  disconnected,
+}
+
+ConnectionTransitionState fromConnectionState(
+  BluetoothConnectionState connState,
+) {
+  switch (connState) {
+    case BluetoothConnectionState.connected:
+      return ConnectionTransitionState.connected;
+    case BluetoothConnectionState.disconnected:
+      return ConnectionTransitionState.disconnected;
+    // ignore: deprecated_member_use
+    case BluetoothConnectionState.connecting:
+      return ConnectionTransitionState.connecting;
+    // ignore: deprecated_member_use
+    case BluetoothConnectionState.disconnecting:
+      return ConnectionTransitionState.disconnecting;
+  }
+}
+
+// Connection manager that keeps the provider alive if connected.
 @riverpod
-bool isThisDeviceConnected(Ref ref, BluetoothDevice device) {
-  final sub = device.connectionState.listen((_) {
-    ref.invalidateSelf();
-  });
-  ref.onDispose(sub.cancel);
-  return device.isConnected;
-}
+class ConnectionManager extends _$ConnectionManager {
+  StreamSubscription? _connStateSub;
+  KeepAliveLink? _keepAliveLink;
+  int tryReconnect = 0;
 
-@Riverpod(keepAlive: true, retry: retryOnce)
-FutureOr<BluetoothDevice> connectedBluetoothDevice(
-  Ref ref,
-  BluetoothDevice device,
-) async {
-  _log.fine("Rebuilding connectedDeviceProvider");
-
-  if (!ref.read(bluetoothAdapterOnProvider)) {
-    throw NoNeedToRetry("Bluetooth adapter is off");
-  }
-
-  if (device.isDisconnected) {
-    await device.connectTrackingTransitionState(timeout: connectTimeout);
-  }
-
-  final sub = device.connectionState.listen((connState) {
-    if (connState == BluetoothConnectionState.disconnected) {
-      _log.fine("Device disconnected");
-      ref.invalidateSelf();
+  void updateStateAndKeepAlive({ConnectionTransitionState? newState}) {
+    newState ??= device.isConnected
+        ? ConnectionTransitionState.connected
+        : ConnectionTransitionState.disconnected;
+    switch (newState) {
+      case ConnectionTransitionState.connected:
+      case ConnectionTransitionState.connecting:
+        _keepAliveLink ??= ref.keepAlive();
+        break;
+      case ConnectionTransitionState.disconnecting:
+      case ConnectionTransitionState.disconnected:
+        _keepAliveLink?.close();
+        _keepAliveLink = null;
+        break;
     }
-  });
-  ref.onDispose(sub.cancel);
-  ref.onDispose(() {
-    _log.fine("Disposing connectedDeviceProvider");
-  });
+    state = newState;
+  }
 
-  return device;
+  Future<void> connectWithReconnect(
+    int reConnectCount, {
+    Duration? timeout,
+  }) async {
+    tryReconnect = reConnectCount;
+    while (true) {
+      try {
+        await connect(timeout: timeout);
+        return;
+      } catch (e) {
+        if (reConnectCount == 0) {
+          rethrow;
+        } else {
+          reConnectCount--;
+        }
+      }
+    }
+  }
+
+  Future<void> connect({Duration? timeout}) async {
+    timeout ??= Constants.connectTimeout;
+    updateStateAndKeepAlive(newState: ConnectionTransitionState.connecting);
+    try {
+      _log.fine("Connecting to device ${device.chosenName}");
+      await device.connect(license: License.free, timeout: timeout);
+    } finally {
+      _log.fine("==> connect returned ${device.chosenName}");
+      updateStateAndKeepAlive();
+    }
+  }
+
+  Future<void> disconnect({int? timeout}) async {
+    timeout ??= Constants.disconnectTimeoutSecs;
+    tryReconnect = 0;
+    updateStateAndKeepAlive(newState: ConnectionTransitionState.disconnecting);
+    try {
+      await device.disconnect(timeout: timeout);
+    } finally {
+      updateStateAndKeepAlive();
+    }
+  }
+
+  @override
+  ConnectionTransitionState build(BluetoothDevice device) {
+    ref.onDispose(() {
+      _log.fine("Disposing ConnectionManager for device ${device.chosenName}");
+      _connStateSub?.cancel();
+      _connStateSub = null;
+    });
+
+    _connStateSub = device.connectionState.listen((_) {
+      updateStateAndKeepAlive();
+      if (device.isDisconnected && tryReconnect > 0) {
+        _log.fine("Automatically reconnecting to device ${device.chosenName}");
+        connectWithReconnect(tryReconnect);
+      }
+    });
+
+    if (device.isConnected) {
+      _keepAliveLink ??= ref.keepAlive();
+      return ConnectionTransitionState.connected;
+    } else {
+      _keepAliveLink?.close();
+      _keepAliveLink = null;
+      return ConnectionTransitionState.disconnected;
+    }
+  }
 }
-
-// Helper stream providers from riverpod. They are handy because
-// riverpod helps managing the subscriptions to these easily. We
-// don't need a stateful widget to keep the subscription so that we
-// cancel it when we dispose the widget. ref.listen or ref.watch
-// automatically handles that for us.
 
 @riverpod
 Stream<int> rssiStream(Ref ref, BluetoothDevice device) async* {

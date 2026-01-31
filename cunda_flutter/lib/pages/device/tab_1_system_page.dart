@@ -1,6 +1,7 @@
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1.dart';
 import 'package:cunda_flutter/pages/device/device_view_model.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
+import 'package:cunda_flutter/providers/rpc/client.dart';
 import 'package:cunda_flutter/providers/rpc/protocol.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
 import 'package:flutter/material.dart';
@@ -38,25 +39,15 @@ class SystemTabPage extends StatelessWidget {
 }
 
 enum RpcConnectionStatus {
-  deviceConnecting,
-  deviceConnected,
   rpcConnecting,
   rpcConnected,
-  rpcDisconnecting,
-  rpcDisconnected,
-  deviceDisconnecting,
-  deviceDisconnected;
+  notRpcDevice;
 
   Icon get icon {
     return switch (this) {
-      deviceConnecting => Icon(Icons.bluetooth_searching),
-      deviceConnected => Icon(Icons.bluetooth_connected),
       rpcConnecting => Icon(Icons.bluetooth_searching),
       rpcConnected => Icon(Icons.bluetooth_connected),
-      rpcDisconnecting => Icon(Icons.bluetooth),
-      rpcDisconnected => Icon(Icons.bluetooth_disabled),
-      deviceDisconnecting => Icon(Icons.bluetooth),
-      deviceDisconnected => Icon(Icons.bluetooth_disabled),
+      notRpcDevice => Icon(Icons.bluetooth_disabled),
     };
   }
 }
@@ -68,63 +59,95 @@ class BluetoothConnectionStatusCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final deviceConn = ref.watch(connectionManagerProvider(device));
     final eDispatcher = ref.watch(endpointDispatcherProvider(device));
     return eDispatcher.when(
-      data: (_) => connectionCard(context, RpcConnectionStatus.deviceConnected),
-      error: (err, s) =>
-          connectionCard(context, RpcConnectionStatus.rpcDisconnected),
-      loading: () => connectionCard(context, RpcConnectionStatus.rpcConnecting),
+      data: (_) =>
+          connectionCard(context, deviceConn, RpcConnectionStatus.rpcConnected),
+      error: (err, s) {
+        if (err is NotRpcDeviceException) {
+          return connectionCard(
+            context,
+            deviceConn,
+            RpcConnectionStatus.notRpcDevice,
+          );
+        } else {
+          // ConnectionLost
+          return connectionCard(
+            context,
+            deviceConn,
+            RpcConnectionStatus.rpcConnecting,
+          );
+        }
+      },
+      loading: () => connectionCard(
+        context,
+        deviceConn,
+        RpcConnectionStatus.rpcConnecting,
+      ),
     );
   }
 
-  Widget connectionCard(BuildContext context, RpcConnectionStatus status) {
-    final titleStr = switch (status) {
-      RpcConnectionStatus.deviceConnecting => "Connecting",
-      RpcConnectionStatus.deviceConnected => "Connected",
-      RpcConnectionStatus.rpcConnecting => "Rpc Connecting",
-      RpcConnectionStatus.rpcConnected => "Rpc Connected",
-      RpcConnectionStatus.rpcDisconnecting => "Rpc Closing",
-      RpcConnectionStatus.rpcDisconnected => "Rpc Closed",
-      RpcConnectionStatus.deviceDisconnecting => "Disconnecting",
-      RpcConnectionStatus.deviceDisconnected => "Disconnected",
+  Widget connectionCard(
+    BuildContext context,
+    ConnectionTransitionState connState,
+    RpcConnectionStatus rpcState,
+  ) {
+    final titleStr = switch (connState) {
+      ConnectionTransitionState.connecting => "Connecting",
+      ConnectionTransitionState.disconnecting => "Disconnecting",
+      ConnectionTransitionState.disconnected => "Disconnected",
+      ConnectionTransitionState.connected => switch (rpcState) {
+        RpcConnectionStatus.rpcConnecting => "RPC Connecting",
+        RpcConnectionStatus.rpcConnected => "RPC Connected",
+        RpcConnectionStatus.notRpcDevice => "Not RPC device",
+      },
     };
-    final subtitleStr = switch (status) {
-      RpcConnectionStatus.deviceConnecting =>
+    final subtitleStr = switch (connState) {
+      ConnectionTransitionState.connecting =>
         "Establishing bluetooth connection...",
-      RpcConnectionStatus.deviceConnected =>
-        "Bluetooth connection established.",
-      RpcConnectionStatus.rpcConnecting => "Establishing RPC channel...",
-      RpcConnectionStatus.rpcConnected =>
-        "Device is connected and RPC channel is ready.",
-      RpcConnectionStatus.rpcDisconnecting => "Rpc Closing",
-      RpcConnectionStatus.rpcDisconnected => "Rpc Closed",
-      RpcConnectionStatus.deviceDisconnecting => "Disconnecting",
-      RpcConnectionStatus.deviceDisconnected => "Disconnected",
+      ConnectionTransitionState.disconnecting => "Disconnecting",
+      ConnectionTransitionState.disconnected => "Disconnected",
+      ConnectionTransitionState.connected => switch (rpcState) {
+        RpcConnectionStatus.rpcConnecting => "Establishing RPC channel...",
+        RpcConnectionStatus.rpcConnected => "Handshake successful",
+        RpcConnectionStatus.notRpcDevice =>
+          "RPC service is not running on the Bluetooth device",
+      },
     };
     return Card(
-      child: ListTile(
-        leading: status.icon,
-        title: Text(titleStr, style: TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(subtitleStr, style: TextStyle(fontSize: 12)),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10.0),
-        ),
-        onLongPress: () {
-          showMenu(
-            context: context,
-            position: RelativeRect.fromLTRB(0, 0, 0, 0),
-            items: [
-              PopupMenuItem<String>(
-                value: 'disconnect',
-                child: Text('Disconnect'),
-              ),
-            ],
-          ).then((value) {
-            if (value == 'disconnect') {
-              device.disconnectTrackingTransitionState();
-              _log.fine('async disconnect from device');
-            }
-          });
+      child: Consumer(
+        builder: (context, ref, child) {
+          return ListTile(
+            leading: rpcState.icon,
+            title: Text(
+              titleStr,
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Text(subtitleStr, style: TextStyle(fontSize: 12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10.0),
+            ),
+            onLongPress: () {
+              showMenu(
+                context: context,
+                position: RelativeRect.fromLTRB(0, 0, 0, 0),
+                items: [
+                  PopupMenuItem<String>(
+                    value: 'disconnect',
+                    child: Text('Disconnect'),
+                  ),
+                ],
+              ).then((value) {
+                if (value == 'disconnect') {
+                  ref
+                      .read(connectionManagerProvider(device).notifier)
+                      .disconnect();
+                  _log.fine('async disconnect from device');
+                }
+              });
+            },
+          );
         },
       ),
     );

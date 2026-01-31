@@ -1,5 +1,6 @@
 import 'package:cunda_flutter/pages/device/tab_0_application_page.dart';
 import 'package:cunda_flutter/pages/device/tab_1_system_page.dart';
+import 'package:cunda_flutter/pages/device/tab_2_settings_page.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
 import 'package:flutter/material.dart';
@@ -34,7 +35,7 @@ class DevicePage extends StatelessWidget {
           children: [
             ApplicationTabPage(device: device),
             SystemTabPage(device: device),
-            // SettingsTabPage(device: device),
+            SettingsTabPage(device: device),
           ],
         ),
       ),
@@ -60,7 +61,9 @@ class ConnectionStatusDot extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    bool isConnected = ref.watch(isThisDeviceConnectedProvider(device));
+    bool isConnected =
+        ref.watch(connectionManagerProvider(device)) ==
+        ConnectionTransitionState.connected;
     return Container(
       width: 10,
       height: 10,
