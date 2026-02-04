@@ -51,6 +51,6 @@ android {
 
 apply from: "../cargokit/gradle/plugin.gradle"
 cargokit {
-    manifestDir = "../../rust"
+    manifestDir = "../../rust_lib_cunda_flutter"
     libname = "rust_lib_cunda_flutter"
 }
