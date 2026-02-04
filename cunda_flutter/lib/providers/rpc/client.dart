@@ -75,6 +75,7 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
   // otherwise the data may reach out of order. There shouldn't be
   // a second Future in flight before the first one completes.
   final rxStreamSub = toClient.onValueReceived.listen((data) async {
+    _log.fine("rx from device: ${data.length} bytes");
     await client.rxCallback(data: data);
   });
   device.cancelWhenDisconnected(rxStreamSub);
@@ -88,6 +89,7 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
   // long story short the stream is not generated in the rust code that
   // we write but rather in the flutter_rust_bridge generated code.
   final txStreamSub = client.init().listen((data) async {
+    _log.fine("tx to device: ${data.length} bytes");
     await toServer.write(data);
   });
   device.cancelWhenDisconnected(txStreamSub);

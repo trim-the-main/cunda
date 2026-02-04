@@ -174,11 +174,11 @@ pub async fn ble_frontend_task(
     static PACKET_RX_BUF: ConstStaticCell<[u8; RX_BUF_SIZE]> =
         ConstStaticCell::new([0u8; RX_BUF_SIZE]);
 
-    let context = DispatchContext::new(button, led);
+    let (rx_impl, tx_impl) = BLE_WIRE_STORAGE.init(ble_periph_role);
+
+    let context = DispatchContext::new(button, led, tx_impl.clone());
     let dispatcher = BleDispatcher::new(context, spawner.into());
     let vkk = dispatcher.min_key_len();
-
-    let (rx_impl, tx_impl) = BLE_WIRE_STORAGE.init(ble_periph_role);
 
     let mut server = Server::new(
         tx_impl,

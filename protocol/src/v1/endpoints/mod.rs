@@ -18,12 +18,14 @@ endpoints! {
     | PingEndpoint        | NoArg       | EmptyRes               | "sys_ping"              |
     | StartSysStatsTopic  | NoArg       | EmptyRes               | "start_sys_stats_topic" |
     | StopSysStatsTopic   | NoArg       | EmptyRes               | "stop_sys_stats_topic"  |
+    | GetMtu              | NoArg       | u16                    | "get_mtu"               |
     // Application Endpoints
-    | GetApplSettings      | NoArg        | ApplSettings         | "get_appl_settings"  |
-    | SetApplSettings      | ApplSettings | EmptyRes             | "set_appl_settings"  |
-    | BlinkLedEndpoint     | u8           | EmptyRes             | "blink_led_n_times"  |
-    | StartButtonEventsTopic  | NoArg       | EmptyRes               | "start_button_events_topic" |
-    | StopButtonEventsTopic   | NoArg       | EmptyRes               | "stop_button_events_topic"  |
+    | GetApplSettings         | NoArg             | ApplSettings       | "get_appl_settings"         |
+    | SetApplSettings         | ApplSettings      | EmptyRes           | "set_appl_settings"         |
+    | BlinkLedEndpoint        | u8                | EmptyRes           | "blink_led_n_times"         |
+    | StartButtonEventsTopic  | NoArg             | EmptyRes           | "start_button_events_topic" |
+    | StopButtonEventsTopic   | NoArg             | EmptyRes           | "stop_button_events_topic"  |
+    | EchoEndpoint            | EchoRequest       | EchoResponse       | "echo"                      |
 }
 
 #[derive(Serialize, Deserialize, Schema, Debug, Clone, Default)]
@@ -92,6 +94,15 @@ impl Default for ApplSettings {
     }
 }
 
+#[derive(Serialize, Deserialize, Schema, Debug, Clone)]
+pub struct EchoRequest {
+    pub inner: ProtocolStringType!(capacity: 512),
+}
+
+#[derive(Serialize, Deserialize, Schema, Debug, Clone)]
+pub struct EchoResponse {
+    pub inner: ProtocolStringType!(capacity: 512),
+}
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.

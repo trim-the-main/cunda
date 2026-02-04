@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1/endpoints.dart';
 import 'package:cunda_flutter/providers/rpc/protocol.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
 import 'package:flutter/material.dart';
@@ -47,6 +48,13 @@ class _ApplicationTabPageState extends State<ApplicationTabPage>
           child: GpioSection(device: widget.device),
         ),
       ),
+
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: EchoSection(widget: widget),
+        ),
+      ),
     ];
 
     return ListView.separated(
@@ -57,6 +65,71 @@ class _ApplicationTabPageState extends State<ApplicationTabPage>
       itemBuilder: (BuildContext context, int index) {
         return applTiles[index];
       },
+    );
+  }
+}
+
+class EchoSection extends ConsumerWidget {
+  const EchoSection({super.key, required this.widget});
+
+  final ApplicationTabPage widget;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final eDispatcher = ref.watch(endpointDispatcherProvider(widget.device));
+    final child = eDispatcher.when(
+      data: (eDispatcher) => TextField(
+        decoration: InputDecoration(
+          border: OutlineInputBorder(),
+          labelText: 'Enter text to echo',
+        ),
+        onSubmitted: (value) {
+          eDispatcher
+              .echoEndpoint(req: EchoRequest(inner: value))
+              .then((response) {
+                if (!context.mounted) {
+                  return;
+                }
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Echo response(len=${response.inner.length}): ${response.inner}',
+                    ),
+                  ),
+                );
+              })
+              .catchError((error) {
+                if (!context.mounted) {
+                  return;
+                }
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('Error: $error')));
+              });
+        },
+      ),
+      error: (Object error, StackTrace stackTrace) {
+        return Text(
+          "Error establising connection to ${widget.device.chosenName}",
+        );
+      },
+      loading: () {
+        return Center(child: CircularProgressIndicator());
+      },
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Echo".toUpperCase(),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 12),
+        child,
+        SizedBox(height: 12),
+      ],
     );
   }
 }
@@ -100,64 +173,64 @@ class _GpioSectionState extends ConsumerState<GpioSection> {
         );
       });
     });
-    return ref
+    final rows = ref
         .watch(endpointDispatcherProvider(widget.device))
         .when(
-          data: (eDispatcher) {
-            _log.fine("Rebuilding GPIO section stateful widget");
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Gpio".toUpperCase(),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 12),
-                ConsoleLikeTextField(
-                  txtStream: buttonEventOutput.stream,
-                  rowCount: 4,
-                ),
-                SizedBox(height: 12),
+          data: (eDispatcher) => [
+            ConsoleLikeTextField(
+              txtStream: buttonEventOutput.stream,
+              rowCount: 4,
+            ),
+            SizedBox(height: 12),
 
-                Center(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      eDispatcher.blinkLedEndpoint(req: 1);
-                    },
-                    child: Text("Blink Once"),
-                  ),
-                ),
-                SizedBox(height: 12),
-                Center(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      eDispatcher.blinkLedEndpoint(req: 2);
-                    },
-                    child: Text("Blink Twice"),
-                  ),
-                ),
-                SizedBox(height: 12),
-                Center(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      eDispatcher.blinkLedEndpoint(req: 3);
-                    },
-                    child: Text("Blink Thrice"),
-                  ),
-                ),
-                SizedBox(height: 12),
-              ],
-            );
-          },
-          error: (Object error, StackTrace stackTrace) {
-            return Text(
-              "Error establising connection to ${widget.device.chosenName}",
-            );
-          },
-          loading: () => Center(child: CircularProgressIndicator()),
+            Center(
+              child: ElevatedButton(
+                onPressed: () {
+                  eDispatcher.blinkLedEndpoint(req: 1);
+                },
+                child: Text("Blink Once"),
+              ),
+            ),
+            SizedBox(height: 12),
+            Center(
+              child: ElevatedButton(
+                onPressed: () {
+                  eDispatcher.blinkLedEndpoint(req: 2);
+                },
+                child: Text("Blink Twice"),
+              ),
+            ),
+            SizedBox(height: 12),
+            Center(
+              child: ElevatedButton(
+                onPressed: () {
+                  eDispatcher.blinkLedEndpoint(req: 3);
+                },
+                child: Text("Blink Thrice"),
+              ),
+            ),
+          ],
+          error: (Object error, StackTrace stackTrace) => [
+            Text("Error establising connection to ${widget.device.chosenName}"),
+          ],
+          loading: () => [Center(child: CircularProgressIndicator())],
         );
+
+    _log.fine("Rebuilding GPIO section stateful widget");
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Gpio".toUpperCase(),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 12),
+        ...rows,
+        SizedBox(height: 12),
+      ],
+    );
   }
 }
 

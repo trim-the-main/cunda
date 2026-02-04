@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1.dart';
 import 'package:cunda_flutter/pages/device/device_view_model.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
@@ -199,6 +201,7 @@ class SquareCard extends StatelessWidget {
               Row(
                 children: [
                   icon,
+                  SizedBox(width: 4),
                   Text(title, style: Theme.of(context).textTheme.titleMedium),
                 ],
               ),
@@ -242,41 +245,28 @@ class DeviceHealth extends ConsumerWidget {
   final BluetoothDevice device;
   const DeviceHealth({super.key, required this.device});
 
-  Widget _batteryCard() {
-    const icons = [
-      Icon(Icons.battery_0_bar),
-      Icon(Icons.battery_1_bar),
-      Icon(Icons.battery_2_bar),
-      Icon(Icons.battery_3_bar),
-      Icon(Icons.battery_4_bar),
-    ];
-
+  Widget _mtuCard() {
+    const icon = Icon(Icons.settings_ethernet);
     return Consumer(
       builder: (context, ref, _) {
-        return ref
-            .watch(mtuStreamProvider(device))
-            .when(
-              data: (data) {
-                final batteryValue = data.toDouble();
-                final indicatorValue = batteryValue / 100;
-                return SquareCard(
-                  icon: icons[(data * icons.length / 100).toInt()],
-                  title: "Battery",
-                  displayValue: "$batteryValue%",
-                  indicatorValue: indicatorValue,
-                );
-              },
-              error: (error, stackTrace) => SquareCard(
-                icon: icons[0],
-                title: "Battery",
-                displayValue: "Error",
-              ),
-              loading: () => SquareCard(
-                icon: icons[0],
-                title: "Battery",
-                displayValue: "Loading",
-              ),
+        final value = !Platform.isLinux
+            ? ref.watch(mtuStreamProvider(device))
+            : ref.watch(getMtuFromDeviceProvider(device));
+
+        return value.when(
+          data: (mtu) {
+            return SquareCard(
+              icon: icon,
+              title: "MTU",
+              displayValue: "$mtu",
+              indicatorValue: mtu.toDouble() / 256,
             );
+          },
+          error: (error, stackTrace) =>
+              SquareCard(icon: icon, title: "MTU", displayValue: "Error"),
+          loading: () =>
+              SquareCard(icon: icon, title: "MTU", displayValue: "Loading"),
+        );
       },
     );
   }
@@ -326,7 +316,7 @@ class DeviceHealth extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "Device Health".toUpperCase(),
+          "Device Info".toUpperCase(),
           style: Theme.of(
             context,
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
@@ -335,7 +325,7 @@ class DeviceHealth extends ConsumerWidget {
         Row(
           mainAxisSize: MainAxisSize.max,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [_batteryCard(), _rssiCard()],
+          children: [_rssiCard(), _mtuCard()],
         ),
       ],
     );
@@ -466,22 +456,24 @@ class StatusTableWidget extends StatelessWidget {
     );
   }
 
-  TableRow _batteryRow(BuildContext context) {
+  TableRow _mtuRow(BuildContext context) {
     return _rowHelper(
       context,
-      Icon(Icons.battery_1_bar),
-      "Battery",
+      Icon(Icons.settings_ethernet),
+      "Max. Tranmission Unit",
       Consumer(
-        builder: (context, ref, child) => ref
-            .watch(mtuStreamProvider(device))
-            .when(
-              data: (data) => Text("$data%"),
-              error: (error, stackTrace) => Text("Error"),
-              loading: () => LinearProgressIndicator(),
-            ),
+        builder: (context, ref, child) {
+          final value = !Platform.isLinux
+              ? ref.watch(mtuStreamProvider(device))
+              : ref.watch(getMtuFromDeviceProvider(device));
+          return value.when(
+            data: (data) => Text("$data bytes"),
+            error: (error, stackTrace) => Text("Error"),
+            loading: () => LinearProgressIndicator(),
+          );
+        },
       ),
     );
-    //Text("$batteryValue%")
   }
 
   TableRow _rssiRow(BuildContext context) {
@@ -550,10 +542,10 @@ class StatusTableWidget extends StatelessWidget {
             2: FixedColumnWidth(64),
           },
           children: [
-            _batteryRow(context),
-            _rssiRow(context),
             _firmwareVersionRow(context),
+            _rssiRow(context),
             _pingRow(context),
+            _mtuRow(context),
           ],
         ),
       ),

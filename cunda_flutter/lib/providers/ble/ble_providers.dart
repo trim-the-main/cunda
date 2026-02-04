@@ -4,7 +4,6 @@ import 'package:cunda_flutter/constants.dart';
 import 'package:cunda_flutter/services/ble/ble.dart';
 import 'package:cunda_flutter/services/ble/ble_fbp_impl.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
-import 'package:cunda_flutter/utils/riverpod_utils.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:logging/logging.dart';

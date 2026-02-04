@@ -1,5 +1,6 @@
 use core::ops::DerefMut;
 
+use embassy_time::Duration;
 use maitake_sync::RwLock;
 use postcard::ser_flavors::Cobs;
 use postcard::{
@@ -18,7 +19,7 @@ use crate::{
     rpc::accumulator::Accumulator,
 };
 
-pub struct BleWireInner {
+struct BleWireInner {
     server: GattServerRpc<'static>, // Holds the rpc_service and the characteristics
     gatt_conn: Option<GattConn>,    // Connection object
 }
@@ -93,6 +94,7 @@ pub struct BleWireRx {
 }
 
 impl BleWireRx {
+    const ADV_TIMEOUT: Duration = Duration::from_secs(2);
     fn new(inner: &'static RwLock<BleWireInner>, periph_role: PeriphRole) -> Self {
         Self {
             inner,
@@ -216,11 +218,14 @@ impl BleWireRx {
             &mut advertiser_data[..],
         )
         .expect("Failed encoding advertiser data.");
+        let mut params: AdvertisementParameters = Default::default();
+        params.timeout = Some(Self::ADV_TIMEOUT);
+
         defmt::info!("Advertising and waiting for a connection");
         let advertiser = self
             .periph_role
             .advertise(
-                &Default::default(),
+                &params,
                 Advertisement::ConnectableScannableUndirected {
                     adv_data: &advertiser_data[..adv_size],
                     scan_data: &[],
@@ -241,29 +246,22 @@ impl BleWireRx {
             let adv_name = self.load_name().await;
             match self.advertise_once(adv_name).await {
                 Ok(connection) => {
-                    // let Ok(server) = GattServerRpc::new_default(adv_name) else {
-                    //     defmt::warn!("Failed to create GattServerRpc");
-                    //     continue;
-                    // };
-                    // try to construct the connection server pair on the static allocation
-                    {
-                        let mut guard = self.inner.write().await;
-                        let inner = guard.deref_mut();
-                        assert!(inner.gatt_conn.is_none());
+                    // We got a connection, try to put it in the static storage
+                    let mut guard = self.inner.write().await;
+                    let inner = guard.deref_mut();
+                    assert!(inner.gatt_conn.is_none());
 
-                        // SAFETY: We have the exclusive reference to the inner storage which
-                        // must be declared static.
-                        let inner: &'static mut BleWireInner =
-                            unsafe { core::mem::transmute(inner) };
+                    // SAFETY: We have the exclusive reference to the inner storage which
+                    // must be declared static.
+                    let inner: &'static mut BleWireInner = unsafe { core::mem::transmute(inner) };
 
-                        if inner.store_connection(connection).is_err() {
-                            defmt::warn!(
-                                "Failed to create a GattConnection from a Connection and GattRpcServer"
-                            );
-                            continue;
-                        } else {
-                            return;
-                        }
+                    if inner.store_connection(connection).is_err() {
+                        defmt::warn!(
+                            "Failed to create a GattConnection from a Connection and GattRpcServer"
+                        );
+                        continue;
+                    } else {
+                        return;
                     }
                 }
                 Err(err) => {
@@ -338,6 +336,15 @@ pub struct BleWireTx {
 impl BleWireTx {
     fn new(inner: &'static RwLock<BleWireInner>) -> Self {
         Self { inner }
+    }
+
+    pub(crate) async fn get_current_mtu(&self) -> Option<u16> {
+        let guard = self.inner.read().await;
+
+        let Some(ref conn) = guard.gatt_conn else {
+            return None;
+        };
+        Some(conn.raw().att_mtu())
     }
 }
 

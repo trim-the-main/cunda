@@ -35,8 +35,16 @@ async fn second_cpu_main() {
     loop {
         defmt::info!("Doing some long and complicated calculation");
         let start = embassy_time::Instant::now();
+
+        // The busy loop with just empty loop body hits a bug:
+        // https://github.com/esp-rs/esp-hal/issues/4903
+        // It causes the loop to terminate early. It is not super
+        // crucial here but spacing out the Instant::now calls in
+        // start.elapsed() helps keeping the CPU spinning longer
         while start.elapsed() < Duration::from_secs(5) {
-            value.fetch_add(1, Ordering::SeqCst);
+            for _ in 0..(1024 * 128) {
+                value.fetch_add(1, Ordering::SeqCst);
+            }
         }
         defmt::info!("Calculation finished");
         Timer::after(Duration::from_secs(5)).await;
@@ -56,15 +64,14 @@ async fn main(spawner: Spawner) -> ! {
 
     esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 98768);
 
-    static APP_CORE_STACK: StaticCell<Stack<16384>> = StaticCell::new();
-    let app_core_stack = APP_CORE_STACK.init(Stack::new());
-    let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
-
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     esp_rtos::start(timg0.timer0);
 
     defmt::info!("Embassy initialized on Core 0");
 
+    static APP_CORE_STACK: StaticCell<Stack<16384>> = StaticCell::new();
+    let app_core_stack = APP_CORE_STACK.init(Stack::new());
+    let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     esp_rtos::start_second_core(
         peripherals.CPU_CTRL,
         sw_int.software_interrupt0,

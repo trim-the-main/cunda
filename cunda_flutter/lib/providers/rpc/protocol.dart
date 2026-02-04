@@ -108,3 +108,12 @@ class ApplicationSettings extends _$ApplicationSettings {
     );
   }
 }
+
+@riverpod
+Future<int> getMtuFromDevice(Ref ref, BluetoothDevice device) async {
+  final eDispatcher = await ref.watch(
+    endpointDispatcherProvider(device).future,
+  );
+  _log.fine("Calling getMtu RPC endpoint");
+  return await eDispatcher.getMtu(req: NoArg());
+}

@@ -134,6 +134,12 @@ async fn stop_sys_stats_topic(
     topic_stop_signal.signal(());
     protocol::endpoints::EmptyRes {}
 }
+
+async fn get_mtu(context: &mut DispatchContext, _header: VarHeader, _rqst: NoArg) -> u16 {
+    defmt::debug!("Handling get_mtu");
+    context.tx.get_current_mtu().await.unwrap_or(0)
+}
+
 // Application Endpoints
 static APPL_SETTINGS: RwLock<protocol::endpoints::ApplSettings> =
     RwLock::new(protocol::endpoints::ApplSettings::new());
@@ -264,6 +270,14 @@ async fn stop_button_events_topic(
     topic_stop_signal.signal(());
     protocol::endpoints::EmptyRes {}
 }
+async fn echo(
+    _context: &mut DispatchContext,
+    _header: VarHeader,
+    rqst: EchoRequest,
+) -> protocol::endpoints::EchoResponse {
+    defmt::debug!("Handling echo");
+    protocol::endpoints::EchoResponse { inner: rqst.inner }
+}
 
 const fn topic_state<const SIZE: usize>(map: TopicMap) -> [(&'static Key, TopicStopSignal); SIZE] {
     let mut table: [MaybeUninit<(&'static Key, TopicStopSignal)>; SIZE] =
@@ -286,17 +300,24 @@ pub type TopicTaskTable = &'static [(&'static Key, TopicStopSignal)];
 static TOPIC_TASK_STATE: [(&'static Key, TopicStopSignal); protocol::topics::TOPICS.topics.len()] =
     topic_state(protocol::topics::TOPICS);
 
-pub struct DispatchContext {
+pub(crate) struct DispatchContext {
     task_table: TopicTaskTable,
-    pub button: &'static Mutex<Input<'static>>,
-    pub led: Output<'static>,
+    pub(crate) button: &'static Mutex<Input<'static>>,
+    pub(crate) led: Output<'static>,
+    tx: BleWireTx,
 }
+
 impl DispatchContext {
-    pub fn new(button: &'static Mutex<Input<'static>>, led: Output<'static>) -> Self {
+    pub fn new(
+        button: &'static Mutex<Input<'static>>,
+        led: Output<'static>,
+        tx: BleWireTx,
+    ) -> Self {
         Self {
             task_table: &TOPIC_TASK_STATE,
             button,
             led,
+            tx,
         }
     }
 }
@@ -335,12 +356,14 @@ define_dispatch! {
         | PingEndpoint        | async               | sys_ping              |
         | StartSysStatsTopic  | spawn               | start_sys_stats_topic |
         | StopSysStatsTopic   | async               | stop_sys_stats_topic  |
+        | GetMtu              | async               | get_mtu               |
         // Application Endpoints
         | GetApplSettings        | async             | get_appl_settings  |
         | SetApplSettings        | async             | set_appl_settings  |
         | BlinkLedEndpoint       | async             | blink_led_n_times  |
         | StartButtonEventsTopic | spawn             | start_button_events_topic |
         | StopButtonEventsTopic  | async             | stop_button_events_topic  |
+        | EchoEndpoint           | async             | echo                      |
     };
     topics_in: {
         list: protocol::topics::EMPTY_TOPICS;
