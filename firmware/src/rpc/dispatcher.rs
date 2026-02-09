@@ -4,7 +4,7 @@ use embassy_futures::select::{Either, select};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
 use embassy_time::{Duration, Instant, Ticker, Timer};
 use esp_hal::gpio::{Input, Output};
-use maitake_sync::{Mutex, RwLock};
+use maitake_sync::Mutex;
 use postcard_rpc::{
     Key, Topic, TopicMap, define_dispatch,
     header::VarHeader,
@@ -28,17 +28,18 @@ async fn get_firmware_version(
     VersionString::from_str("v0.0.1").expect("Version string too long")
 }
 
-static SYS_SETTINGS: RwLock<protocol::endpoints::SysSettings> =
-    RwLock::new(protocol::endpoints::SysSettings::new());
-
 async fn get_sys_settings(
     _context: &mut DispatchContext,
     _header: VarHeader,
     _rqst: NoArg,
 ) -> protocol::endpoints::SysSettings {
     defmt::debug!("Handling get_sys_settings");
-    let settings = SYS_SETTINGS.read().await;
-    settings.clone()
+    let mut ret = protocol::endpoints::SysSettings::new();
+    match crate::storage::SYSTEM_CONFIG.get().await {
+        Ok(s) => ret.ble_device_name = s.ble_adv_name,
+        _ => {}
+    }
+    ret
 }
 async fn set_sys_settings(
     _context: &mut DispatchContext,
@@ -46,8 +47,12 @@ async fn set_sys_settings(
     rqst: protocol::endpoints::SysSettings,
 ) -> protocol::endpoints::EmptyRes {
     defmt::debug!("Handling set_sys_settings");
-    let mut settings = SYS_SETTINGS.write().await;
-    *settings = rqst;
+    let mut new_config = crate::storage::SysConfig::default();
+    new_config.ble_adv_name = rqst.ble_device_name;
+
+    if crate::storage::SYSTEM_CONFIG.set(new_config).await.is_err() {
+        defmt::error!("Failed to save sys settings");
+    }
     protocol::endpoints::EmptyRes {}
 }
 async fn sys_ping(
@@ -141,16 +146,18 @@ async fn get_mtu(context: &mut DispatchContext, _header: VarHeader, _rqst: NoArg
 }
 
 // Application Endpoints
-static APPL_SETTINGS: RwLock<protocol::endpoints::ApplSettings> =
-    RwLock::new(protocol::endpoints::ApplSettings::new());
 async fn get_appl_settings(
     _context: &mut DispatchContext,
     _header: VarHeader,
     _rqst: NoArg,
 ) -> protocol::endpoints::ApplSettings {
     defmt::debug!("Handling get_appl_settings");
-    let a_settings = APPL_SETTINGS.read().await;
-    a_settings.clone()
+    let mut a_settings = protocol::endpoints::ApplSettings::new();
+    match crate::storage::APP_CONFIG.get().await {
+        Ok(a) => a_settings.led_blink_duration_ms = a.led_blink_duration,
+        _ => {}
+    }
+    a_settings
 }
 async fn set_appl_settings(
     _context: &mut DispatchContext,
@@ -158,8 +165,12 @@ async fn set_appl_settings(
     rqst: protocol::endpoints::ApplSettings,
 ) -> protocol::endpoints::EmptyRes {
     defmt::debug!("Handling set_appl_settings");
-    let mut a_settings = APPL_SETTINGS.write().await;
-    *a_settings = rqst;
+    let mut new_config = crate::storage::ApplicationConfig::default();
+    new_config.led_blink_duration = rqst.led_blink_duration_ms;
+
+    if crate::storage::APP_CONFIG.set(new_config).await.is_err() {
+        defmt::error!("Failed to save app settings");
+    }
     protocol::endpoints::EmptyRes {}
 }
 async fn blink_led_n_times(
@@ -170,7 +181,12 @@ async fn blink_led_n_times(
     defmt::debug!("Handling blink_led_n_times");
     let times = rqst;
     let led = &mut context.led;
-    let delay = { APPL_SETTINGS.read().await.led_blink_duration_ms };
+    let delay = {
+        crate::storage::APP_CONFIG
+            .get_or_default()
+            .await
+            .led_blink_duration
+    };
     let mut ticker = Ticker::every(Duration::from_millis(delay as u64));
     for _ in 0..times {
         led.set_high();

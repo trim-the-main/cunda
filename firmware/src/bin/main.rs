@@ -69,6 +69,9 @@ async fn main(spawner: Spawner) -> ! {
 
     defmt::info!("Embassy initialized on Core 0");
 
+    let flash = esp_storage::FlashStorage::new(peripherals.FLASH).multicore_auto_park();
+    firmware::storage::init(flash).await;
+
     static APP_CORE_STACK: StaticCell<Stack<16384>> = StaticCell::new();
     let app_core_stack = APP_CORE_STACK.init(Stack::new());
     let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);

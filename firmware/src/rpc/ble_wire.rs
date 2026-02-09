@@ -202,13 +202,12 @@ impl BleWireRx {
 
     async fn advertise_once(
         &mut self,
-        adv_name: &'static str,
+        adv_name: &str,
     ) -> Result<Connection<'static, DefaultPacketPool>, Error> {
         let mut advertiser_data = [0; 31];
         let adv_size = AdStructure::encode_slice(
             &[
                 AdStructure::Flags(LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED),
-                AdStructure::ServiceUuids16(&[[0x0f, 0x18]]),
                 AdStructure::CompleteLocalName(adv_name.as_bytes()),
                 AdStructure::ManufacturerSpecificData {
                     company_identifier: (0x8472), // TIRB
@@ -221,7 +220,10 @@ impl BleWireRx {
         let mut params: AdvertisementParameters = Default::default();
         params.timeout = Some(Self::ADV_TIMEOUT);
 
-        defmt::info!("Advertising and waiting for a connection");
+        defmt::info!(
+            "Advertising and waiting for a connection adv_size {}",
+            adv_size
+        );
         let advertiser = self
             .periph_role
             .advertise(
@@ -237,14 +239,10 @@ impl BleWireRx {
         advertiser.accept().await
     }
 
-    async fn load_name(&self) -> &'static str {
-        "PostcardRPC_BLE"
-    }
-
     async fn advertise(&mut self) {
         loop {
-            let adv_name = self.load_name().await;
-            match self.advertise_once(adv_name).await {
+            let sys_config = crate::storage::SYSTEM_CONFIG.get_or_default().await;
+            match self.advertise_once(&sys_config.ble_adv_name).await {
                 Ok(connection) => {
                     // We got a connection, try to put it in the static storage
                     let mut guard = self.inner.write().await;

@@ -5,3 +5,4 @@ pub mod ble;
 mod rpc;
 
 mod stats;
+pub mod storage;
