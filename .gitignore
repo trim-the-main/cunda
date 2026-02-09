@@ -15,6 +15,7 @@ cunda_flutter/pubspec.lock
 cunda_flutter/rust/Cargo.lock
 protocol/Cargo.lock
 frb_prpc_juggle/Cargo.lock
+firmware/Cargo.lock
 
 # FLUTTER_RUST_BRIDGE_CODEGEN generated .gitignore
 
