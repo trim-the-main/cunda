@@ -365,7 +365,7 @@ pub extern "Rust" fn _embassy_trace_poll_start(executor_id: u32) {
 pub extern "Rust" fn _embassy_trace_task_new(executor_id: u32, task_id: u32) {
     // defmt::info!("_embassy_trace_task_new({}, {})", executor_id, task_id);
     let _ = STATS.add_consumer_if_not_found(executor_id, executor_id);
-    let _ = STATS.add_consumer_if_not_found(task_id, executor_id);
+    let _ = STATS.add_consumer_if_not_found(executor_id, task_id);
 }
 
 /// This callback is called AFTER a task is destructed/freed. This will always
