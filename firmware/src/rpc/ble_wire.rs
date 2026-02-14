@@ -1,5 +1,7 @@
 use core::ops::DerefMut;
 
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::channel::{Channel, Receiver, Sender};
 use embassy_time::Duration;
 use maitake_sync::RwLock;
 use postcard::ser_flavors::Cobs;
@@ -8,12 +10,16 @@ use postcard::{
     ser_flavors::{Flavor, Slice},
 };
 use postcard_rpc::header::VarHeader;
-use postcard_rpc::server::{WireRx, WireRxErrorKind, WireTx, WireTxErrorKind};
+use postcard_rpc::server::{
+    self, AsWireTxErrorKind, Dispatch, WireRx, WireRxErrorKind, WireTx, WireTxErrorKind,
+};
 use serde::Serialize;
 use static_cell::StaticCell;
 use trouble_host::{gatt::GattConnection, prelude::*};
 
-use crate::rpc::accumulator::RX_BUF_SIZE;
+use crate::ble::WriteEventWrapper;
+use crate::rpc::accumulator::{AccumulatorYieldError, RX_BUF_SIZE};
+use crate::rpc::dispatcher::BleDispatcher;
 use crate::{
     ble::{BleRpcMessageBuffer, GattServerRpc, PeriphRole},
     rpc::accumulator::Accumulator,
@@ -64,10 +70,14 @@ impl BleWireStorage {
         }
     }
 
-    pub fn init(&'static self, periph_role: PeriphRole) -> (BleWireRx, BleWireTx) {
+    pub fn init(
+        &'static self,
+        periph_role: PeriphRole,
+        ch: &'static Channel<CriticalSectionRawMutex, WriteEventWrapper, 16>,
+    ) -> (BleWireRx, BleWireTx) {
         let wire = &*self.inner.init(RwLock::new(BleWireInner::new()));
 
-        let rx = BleWireRx::new(wire, periph_role);
+        let rx = BleWireRx::new(wire, periph_role, ch.sender());
         let tx = BleWireTx::new(wire);
         (rx, tx)
     }
@@ -90,25 +100,29 @@ pub struct BleWireRx {
     // multiple Tx handles. When the connection drops, Rx handle will receive a
     // disconnection event
     disconnected: bool,
-    acc: Accumulator<RX_BUF_SIZE>,
+    dispatcher_channel: Sender<'static, CriticalSectionRawMutex, WriteEventWrapper, 16>,
 }
 
 impl BleWireRx {
     const ADV_TIMEOUT: Duration = Duration::from_secs(2);
-    fn new(inner: &'static RwLock<BleWireInner>, periph_role: PeriphRole) -> Self {
+    fn new(
+        inner: &'static RwLock<BleWireInner>,
+        periph_role: PeriphRole,
+        dispatcher_channel: Sender<'static, CriticalSectionRawMutex, WriteEventWrapper, 16>,
+    ) -> Self {
         Self {
             inner,
             periph_role,
             disconnected: true,
-            acc: Accumulator::new(),
+            dispatcher_channel,
         }
     }
 
-    async fn receive_from_gatt_conn(
+    pub async fn receive_from_gatt_conn(
         &mut self,
         rx_handle: u16,
-        gatt_conn: &GattConnection<'_, '_, DefaultPacketPool>,
-    ) -> Result<(), <Self as WireRx>::Error> {
+        gatt_conn: &GattConnection<'static, 'static, DefaultPacketPool>,
+    ) -> Result<(), WireRxErrorKind> {
         loop {
             match gatt_conn.next().await {
                 GattConnectionEvent::Disconnected { reason } => {
@@ -172,11 +186,9 @@ impl BleWireRx {
                     GattEvent::Write(write_event) => {
                         if write_event.handle() == rx_handle {
                             defmt::info!("Received data: {:?}", write_event.data());
-                            self.acc.feed(write_event.data()).unwrap();
-                            write_event
-                                .accept()
-                                .expect("Accepting gatt event shouldn't fail.");
-
+                            self.dispatcher_channel
+                                .send(WriteEventWrapper::new(write_event))
+                                .await;
                             return Ok(());
                         } else {
                             defmt::warn!(
@@ -239,7 +251,7 @@ impl BleWireRx {
         advertiser.accept().await
     }
 
-    async fn advertise(&mut self) {
+    pub async fn advertise(&mut self) {
         loop {
             let sys_config = crate::storage::SYSTEM_CONFIG.get_or_default().await;
             match self.advertise_once(&sys_config.ble_adv_name).await {
@@ -271,12 +283,7 @@ impl BleWireRx {
             }
         }
     }
-}
-
-impl WireRx for BleWireRx {
-    type Error = WireRxErrorKind;
-
-    async fn receive<'a>(&mut self, buf: &'a mut [u8]) -> Result<&'a mut [u8], Self::Error> {
+    pub async fn work_on_connection(&mut self) -> Result<(), WireRxErrorKind> {
         let inner = self.inner.read().await;
         let BleWireInner {
             gatt_conn: Some(ref gatt_conn),
@@ -285,32 +292,16 @@ impl WireRx for BleWireRx {
         else {
             return Err(WireRxErrorKind::Other);
         };
-        loop {
-            self.receive_from_gatt_conn(server.rpc_service.rx.handle, gatt_conn)
-                .await?;
-            match self.acc.yield_frame() {
-                Ok(frame) => {
-                    if frame.len() <= buf.len() {
-                        buf[..frame.len()].copy_from_slice(frame);
-                        defmt::info!("RECEIVED NORMAL {=usize} {=[u8]}", frame.len(), frame);
-                        return Ok(&mut buf[..frame.len()]);
-                    } else {
-                        self.acc.reset();
-                        return Err(WireRxErrorKind::ReceivedMessageTooLarge);
-                    }
-                }
-                Err(err) => match err {
-                    super::accumulator::AccumulatorYieldError::DecodingError => {
-                        self.acc.reset();
-                        return Err(WireRxErrorKind::Other);
-                    }
-                    super::accumulator::AccumulatorYieldError::NotACobsFrame => continue,
-                },
-            }
-        }
+
+        while self
+            .receive_from_gatt_conn(server.rpc_service.rx.handle, gatt_conn)
+            .await
+            .is_ok()
+        {}
+        return Err(WireRxErrorKind::ConnectionClosed);
     }
 
-    async fn wait_connection(&mut self) {
+    pub async fn wait_connection(&mut self) {
         if !self.disconnected {
             return;
         }
@@ -445,6 +436,60 @@ impl WireTx for BleWireTx {
         _a: core::fmt::Arguments<'a>,
     ) -> Result<(), Self::Error> {
         todo!()
+    }
+}
+
+#[embassy_executor::task]
+pub async fn rpc_dispatcher_task(
+    mut d: BleDispatcher,
+    tx: server::Sender<BleWireTx>,
+    rx: Receiver<'static, CriticalSectionRawMutex, WriteEventWrapper, 16>,
+) {
+    let mut acc = Accumulator::<RX_BUF_SIZE>::new();
+
+    loop {
+        {
+            defmt::debug!("Dispatcher waiting for write event");
+            let w_event = rx.receive().await;
+            if acc.feed(w_event.data()).is_err() {
+                // only error is no space for the message
+                // TODO: there is a case where we don't have enough space to put the entire
+                // new write_event data into the accumulator but maybe we can put enough to
+                // decode, process that frame, then put the remaning at the beginning. Handle
+                // that case later. I am confident that ergot cobs accumulator deals with that
+                // with minimal memcpy. The only problem with that is that I am okay to do one
+                // more memcpy so tha I can free the write_event back to the packet pool before
+                // the next await point.
+                acc.reset();
+            }
+            drop(w_event); // return the underlying buffer back to the PacketPool
+
+            loop {
+                match acc.yield_frame() {
+                    Ok(buf) => {
+                        defmt::debug!("Acc yielded a frame");
+
+                        let Some((hdr, body)) = VarHeader::take_from_slice(buf) else {
+                            // TODO: send a nak on badly formed messages? We don't have
+                            // much to say because we don't have a key or seq no or anything
+                            continue;
+                        };
+                        let fut = d.handle(&tx, &hdr, body);
+                        if let Err(e) = fut.await {
+                            let kind = e.as_kind();
+                            match kind {
+                                WireTxErrorKind::ConnectionClosed => break,
+                                WireTxErrorKind::Other => continue,
+                                WireTxErrorKind::Timeout => continue,
+                                _ => continue,
+                            }
+                        }
+                    }
+                    Err(AccumulatorYieldError::DecodingError) => continue, // try to decode the next package
+                    Err(AccumulatorYieldError::NotACobsFrame) => break,    // wait for more packets
+                }
+            }
+        }
     }
 }
 

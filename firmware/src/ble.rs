@@ -1,11 +1,12 @@
 use embassy_executor::{Spawner, SpawnerTraceExt};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::channel::Channel;
 use esp_hal::gpio::{Input, Output};
 use esp_radio::ble::Config;
 use esp_radio::ble::controller::BleConnector;
 
 use maitake_sync::Mutex;
-use postcard_rpc::server::Server;
+use postcard_rpc::server::{Sender, Server, WireRx};
 use static_cell::{ConstStaticCell, StaticCell};
 use trouble_host::prelude::*;
 
@@ -16,11 +17,11 @@ pub(crate) mod constants {
     pub(crate) const L2CAP_CHANNELS_MAX: usize = 2;
     pub(crate) const N_CMD_SLOTS: usize = 8;
     pub(crate) const MSG_MTU: usize = 255;
+    pub(crate) const GATT_MSG_OVERHEAD: usize = 3;
 }
 
 use crate::ble::constants::*;
-use crate::rpc::accumulator::RX_BUF_SIZE;
-use crate::rpc::ble_wire::BleWireStorage;
+use crate::rpc::ble_wire::{BleWireStorage, rpc_dispatcher_task};
 use crate::rpc::dispatcher::{BleDispatcher, DispatchContext};
 
 pub struct BleRpcMessageBuffer {
@@ -29,7 +30,7 @@ pub struct BleRpcMessageBuffer {
 }
 
 impl BleRpcMessageBuffer {
-    pub(crate) const MSG_SIZE: usize = MSG_MTU;
+    pub(crate) const MSG_SIZE: usize = MSG_MTU - GATT_MSG_OVERHEAD;
 
     pub(crate) fn from_slice(src: &[u8]) -> Option<Self> {
         if src.len() > Self::MSG_SIZE - cobs::max_encoding_overhead(250) {
@@ -159,6 +160,19 @@ pub async fn ble_backend_task(
     }
 }
 
+pub struct WriteEventWrapper {
+    we: WriteEvent<'static, 'static, DefaultPacketPool>,
+}
+impl WriteEventWrapper {
+    pub fn new(we: WriteEvent<'static, 'static, DefaultPacketPool>) -> Self {
+        Self { we }
+    }
+    pub fn data(&self) -> &[u8] {
+        self.we.data()
+    }
+}
+unsafe impl Send for WriteEventWrapper {}
+
 #[embassy_executor::task]
 pub async fn ble_frontend_task(
     ble_periph_role: Peripheral<
@@ -171,38 +185,22 @@ pub async fn ble_frontend_task(
     led: Output<'static>,
 ) {
     static BLE_WIRE_STORAGE: BleWireStorage = BleWireStorage::new();
-    static PACKET_RX_BUF: ConstStaticCell<[u8; RX_BUF_SIZE]> =
-        ConstStaticCell::new([0u8; RX_BUF_SIZE]);
+    static RX_CHANNEL: Channel<CriticalSectionRawMutex, WriteEventWrapper, 16> = Channel::new();
 
-    let (rx_impl, tx_impl) = BLE_WIRE_STORAGE.init(ble_periph_role);
+    let (mut rx_impl, tx_impl) = BLE_WIRE_STORAGE.init(ble_periph_role, &RX_CHANNEL);
 
     let context = DispatchContext::new(button, led, tx_impl.clone());
     let dispatcher = BleDispatcher::new(context, spawner.into());
     let vkk = dispatcher.min_key_len();
 
-    let mut server = Server::new(
-        tx_impl,
-        rx_impl,
-        &mut PACKET_RX_BUF.take()[..],
+    spawner.must_spawn(rpc_dispatcher_task(
         dispatcher,
-        vkk,
-    );
+        Sender::new(tx_impl.clone(), vkk),
+        RX_CHANNEL.receiver(),
+    ));
 
     loop {
-        // If the host disconnects, we'll get an error here. Regardless of which end raised
-        // the error we will reenter the server run loop which will poll the Rx end of the
-        // wire. If it was the Rx end that raised the error, we will directly go into the
-        // advertise loop. If it was the Tx end that raised the Disconnect error then we
-        // will try to receive from Rx which will raise the Disconnect error again and we
-        // will loop once more this time reaching to advertise.
-        let err = server.run().await;
-        match err {
-            postcard_rpc::server::ServerError::TxFatal(err) => {
-                defmt::error!("TxFatal: {}", err);
-            }
-            postcard_rpc::server::ServerError::RxFatal(err) => {
-                defmt::error!("RxFatal: {:?}", err);
-            }
-        }
+        rx_impl.wait_connection().await;
+        rx_impl.work_on_connection().await;
     }
 }
