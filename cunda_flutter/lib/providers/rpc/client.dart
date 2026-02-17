@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc/client.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
@@ -90,7 +91,19 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
   // we write but rather in the flutter_rust_bridge generated code.
   final txStreamSub = client.init().listen((data) async {
     _log.fine("tx to device: ${data.length} bytes");
-    await toServer.write(data);
+    if (data.length < device.mtuNow - 3) {
+      _log.fine("data is smaller than mtu, sending in one go");
+      await toServer.write(data);
+    } else {
+      _log.fine(
+        "data is larger than mtu, splitting into chunks of size ${device.mtuNow - 3}",
+      );
+      for (var i = 0; i < data.length; i += device.mtuNow - 3) {
+        final chunk = data.sublist(i, min(data.length, i + device.mtuNow - 3));
+        _log.fine("sending chunk of size ${chunk.length}");
+        await toServer.write(chunk);
+      }
+    }
   });
   device.cancelWhenDisconnected(txStreamSub);
 

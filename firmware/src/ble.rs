@@ -6,8 +6,8 @@ use esp_radio::ble::Config;
 use esp_radio::ble::controller::BleConnector;
 
 use maitake_sync::Mutex;
-use postcard_rpc::server::{Sender, Server, WireRx};
-use static_cell::{ConstStaticCell, StaticCell};
+use postcard_rpc::server::Sender;
+use static_cell::StaticCell;
 use trouble_host::prelude::*;
 
 use postcard_rpc::server::Dispatch;
@@ -21,7 +21,7 @@ pub(crate) mod constants {
 }
 
 use crate::ble::constants::*;
-use crate::rpc::ble_wire::{BleWireStorage, rpc_dispatcher_task};
+use crate::rpc::ble_wire::{BleWireStorage, IncomingData, rpc_dispatcher_task};
 use crate::rpc::dispatcher::{BleDispatcher, DispatchContext};
 
 pub struct BleRpcMessageBuffer {
@@ -32,7 +32,18 @@ pub struct BleRpcMessageBuffer {
 impl BleRpcMessageBuffer {
     pub(crate) const MSG_SIZE: usize = MSG_MTU - GATT_MSG_OVERHEAD;
 
-    pub(crate) fn from_slice(src: &[u8]) -> Option<Self> {
+    pub(crate) fn try_from_slice(src: &[u8]) -> Option<Self> {
+        let mut retval: BleRpcMessageBuffer = Default::default();
+        if src.len() > retval.msg.len() {
+            return None;
+        }
+        retval.msg[..src.len()].copy_from_slice(src);
+        retval.used_length = src.len();
+        return Some(retval);
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn try_encode_cobs(src: &[u8]) -> Option<Self> {
         if src.len() > Self::MSG_SIZE - cobs::max_encoding_overhead(250) {
             return None;
         }
@@ -45,7 +56,7 @@ impl BleRpcMessageBuffer {
         Some(retval)
     }
 
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             msg: [0u8; Self::MSG_SIZE],
             used_length: 0,
@@ -90,7 +101,7 @@ pub struct RpcService {
     pub rx: BleRpcMessageBuffer,
 
     #[descriptor(uuid = descriptors::MEASUREMENT_DESCRIPTION, name = "tx", read, value = "tx buffer")]
-    #[characteristic(uuid = "408813df-5dd4-1f87-ec11-cdb001100002", notify)]
+    #[characteristic(uuid = "408813df-5dd4-1f87-ec11-cdb001100002", indicate)]
     pub tx: BleRpcMessageBuffer,
 }
 
@@ -160,19 +171,6 @@ pub async fn ble_backend_task(
     }
 }
 
-pub struct WriteEventWrapper {
-    we: WriteEvent<'static, 'static, DefaultPacketPool>,
-}
-impl WriteEventWrapper {
-    pub fn new(we: WriteEvent<'static, 'static, DefaultPacketPool>) -> Self {
-        Self { we }
-    }
-    pub fn data(&self) -> &[u8] {
-        self.we.data()
-    }
-}
-unsafe impl Send for WriteEventWrapper {}
-
 #[embassy_executor::task]
 pub async fn ble_frontend_task(
     ble_periph_role: Peripheral<
@@ -185,7 +183,7 @@ pub async fn ble_frontend_task(
     led: Output<'static>,
 ) {
     static BLE_WIRE_STORAGE: BleWireStorage = BleWireStorage::new();
-    static RX_CHANNEL: Channel<CriticalSectionRawMutex, WriteEventWrapper, 16> = Channel::new();
+    static RX_CHANNEL: Channel<CriticalSectionRawMutex, IncomingData, 16> = Channel::new();
 
     let (mut rx_impl, tx_impl) = BLE_WIRE_STORAGE.init(ble_periph_role, &RX_CHANNEL);
 
@@ -201,6 +199,6 @@ pub async fn ble_frontend_task(
 
     loop {
         rx_impl.wait_connection().await;
-        rx_impl.work_on_connection().await;
+        let _ = rx_impl.work_on_connection().await;
     }
 }
