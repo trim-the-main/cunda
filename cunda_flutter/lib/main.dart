@@ -12,14 +12,14 @@ Future<void> main() async {
   initializeLogging();
   await RustLib.init();
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(ProviderScope(child: const BlePostcardRpcApp()));
+  runApp(ProviderScope(child: const CundaApp()));
 }
 
-class BlePostcardRpcApp extends StatelessWidget {
-  const BlePostcardRpcApp({super.key});
+class CundaApp extends StatelessWidget {
+  const CundaApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(title: 'Postcard Rpc BLE App', home: ScannerPage());
+    return MaterialApp(title: 'Cunda', home: ScannerPage());
   }
 }
