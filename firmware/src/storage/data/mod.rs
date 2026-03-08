@@ -12,7 +12,7 @@ pub enum DType {
 
     // Any u32 bigger than or equal to this is unknown to us. We may find such
     // values in case of a version downgrade. This is the only field whose value
-    // is okay to to move. It has to be at the bottom of the list.
+    // is okay to move. It has to be at the bottom of the list.
     UnknownType,
 }
 
