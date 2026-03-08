@@ -19,6 +19,11 @@ endpoints! {
     | StartSysStatsTopic  | NoArg       | EmptyRes               | "start_sys_stats_topic" |
     | StopSysStatsTopic   | NoArg       | EmptyRes               | "stop_sys_stats_topic"  |
     | GetMtu              | NoArg       | u16                    | "get_mtu"               |
+    // OTA related endpoints
+    | PrepareOta          | OtaMData    | OtaState               | "prepare_ota"              |
+    | TransferOtaBytes    | OtaBytes    | OtaState               | "transfer_ota_bytes"       |
+    | FinalizeOta         | NoArg       | OtaState               | "finalize_ota"             |
+    | ApproveFirmware     | NoArg       | EmptyRes               | "approve_firmware_version" |
     // Application Endpoints
     | GetApplSettings         | NoArg             | ApplSettings       | "get_appl_settings"         |
     | SetApplSettings         | ApplSettings      | EmptyRes           | "set_appl_settings"         |
@@ -30,6 +35,7 @@ endpoints! {
 
 #[derive(Serialize, Deserialize, Schema, Debug, Clone, Default)]
 pub struct NoArg {}
+
 impl From<()> for NoArg {
     fn from(_value: ()) -> Self {
         Self {}
@@ -103,6 +109,29 @@ pub struct EchoRequest {
 pub struct EchoResponse {
     pub inner: ProtocolStringType!(capacity: 512),
 }
+
+////////////////////////
+/// OTA
+///////////////////////
+#[derive(Serialize, Deserialize, Schema, Debug, Clone, Default)]
+pub struct OtaMData {
+    pub size: u32,
+    pub hash_sha256: [u8; 32],
+    pub version: VersionString,
+}
+
+#[derive(Serialize, Deserialize, Schema, Debug, Clone)]
+pub enum OtaState {
+    TransferReady(u32),
+    TransferComplete,
+    Restarting,
+}
+#[derive(Serialize, Deserialize, Schema, Debug, Clone, Default)]
+pub struct OtaBytes {
+    pub offset: u32,
+    pub data: heapless::Vec<u8, 1024>,
+}
+
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
