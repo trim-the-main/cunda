@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc/client.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1/endpoints.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
 import 'package:cunda_flutter/services/ble/ble.dart';
 import 'package:cunda_flutter/utils/riverpod_utils.dart';
@@ -11,7 +13,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'client.g.dart';
 
-final _log = Logger('RpcClientProvider');
+final log = Logger('RpcClientProvider');
 
 enum RpcUuid {
   service(uuidStr: '408813DF-5DD4-1F87-EC11-CDB001100000'),
@@ -34,9 +36,9 @@ class NotRpcDeviceException implements Exception {
 }
 
 Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
-  _log.fine("Setting up the Rpc client");
+  log.fine("Setting up the Rpc client");
   final services = await device.discoverServices();
-  _log.fine("discovered services");
+  log.fine("discovered services");
   final List<BluetoothCharacteristic> rpcServiceCharacteristics;
   try {
     rpcServiceCharacteristics = services
@@ -44,18 +46,18 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
         .single
         .characteristics;
   } on StateError {
-    _log.warning("No Rpc service: {}", services);
+    log.warning("No Rpc service: {}", services);
     throw NotRpcDeviceException(notFound: RpcUuid.service);
   }
 
   BluetoothCharacteristic toServer;
-  _log.fine("List of characteristics: $rpcServiceCharacteristics");
+  log.fine("List of characteristics: $rpcServiceCharacteristics");
   try {
     toServer = rpcServiceCharacteristics
         .where((c) => c.characteristicUuid == RpcUuid.toServer.guidValue)
         .single;
   } on StateError {
-    _log.warning("No characteristic with UUID rpcToServerCharUuid");
+    log.warning("No characteristic with UUID rpcToServerCharUuid");
     throw NotRpcDeviceException(notFound: RpcUuid.toServer);
   }
   BluetoothCharacteristic toClient;
@@ -64,11 +66,11 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
         .where((c) => c.characteristicUuid == RpcUuid.toClient.guidValue)
         .single;
   } on StateError {
-    _log.warning("No characteristic with UUID rpcToServerCharUuid");
+    log.warning("No characteristic with UUID rpcToServerCharUuid");
     throw NotRpcDeviceException(notFound: RpcUuid.toClient);
   }
 
-  _log.fine("Creating Rpc client");
+  log.fine("Creating Rpc client");
   final client = FlutterClient();
 
   // Send data to rust ffi using the callback
@@ -76,7 +78,7 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
   // otherwise the data may reach out of order. There shouldn't be
   // a second Future in flight before the first one completes.
   final rxStreamSub = toClient.onValueReceived.listen((data) async {
-    _log.fine("rx from device: ${data.length} bytes");
+    log.fine("rx from device: ${data.length} bytes");
     await client.rxCallback(data: data);
   });
   device.cancelWhenDisconnected(rxStreamSub);
@@ -90,17 +92,24 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
   // long story short the stream is not generated in the rust code that
   // we write but rather in the flutter_rust_bridge generated code.
   final txStreamSub = client.init().listen((data) async {
-    _log.fine("tx to device: ${data.length} bytes");
-    if (data.length < device.mtuNow - 3) {
-      _log.fine("data is smaller than mtu, sending in one go");
+    log.finest("tx to device: ${data.length} bytes");
+    log.finest("$data");
+    final chunkSize = Platform.isLinux
+        ? 251 - 3
+        : device.mtuNow - 3; // 3 bytes are used for ATT protocol overhead
+    if (data.length <= chunkSize) {
+      log.finest("data is smaller than mtu, sending in one go");
       await toServer.write(data);
     } else {
-      _log.fine(
-        "data is larger than mtu, splitting into chunks of size ${device.mtuNow - 3}",
+      log.finest(
+        "data is larger than mtu, splitting into chunks of size $chunkSize",
       );
-      for (var i = 0; i < data.length; i += device.mtuNow - 3) {
-        final chunk = data.sublist(i, min(data.length, i + device.mtuNow - 3));
-        _log.fine("sending chunk of size ${chunk.length}");
+      for (var i = 0; i < data.length; i += chunkSize) {
+        final chunk = data.sublist(i, min(data.length, i + chunkSize));
+        log.finest(
+          "sending chunk of size ${chunk.length}/${data.length} from offset $i",
+        );
+        log.finest("$chunk");
         await toServer.write(chunk);
       }
     }
@@ -108,7 +117,7 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
   device.cancelWhenDisconnected(txStreamSub);
 
   if (!toClient.isNotifying) {
-    _log.fine("notifications are not on so we are turning them on");
+    log.fine("notifications are not on so we are turning them on");
     await toClient.setNotifyValue(true);
   }
   return client;
@@ -120,7 +129,7 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
 // mean we keep it alive forever, we dispose it when the device disconnects.
 @Riverpod(keepAlive: true, retry: noRetry)
 FutureOr<FlutterClient> rpcClient(Ref ref, BluetoothDevice device) async {
-  _log.fine("Creating rpc client");
+  log.fine("Creating rpc client");
 
   // We will be notified when connectionManager state changes. If disconnected we
   // should not continue.
@@ -130,12 +139,13 @@ FutureOr<FlutterClient> rpcClient(Ref ref, BluetoothDevice device) async {
   }
 
   final client = await _createRpcClientFor(device);
+  await client.approveFirmware(req: NoArg());
   ref.onDispose(() {
-    _log.fine("Disposing rpc client");
+    log.fine("Disposing rpc client");
     client.dispose(); // calls drop on the rust side
   });
   ref.onCancel(() {
-    _log.fine("Canceling rpcClient");
+    log.fine("Canceling rpcClient");
   });
 
   return client;

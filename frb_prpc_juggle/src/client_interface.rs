@@ -59,7 +59,7 @@ pub trait TopicSink: Send + Sync {
 // flutter side will construct a stream object and hand over the
 // StreamSink so that rust side can construct the closure using this
 // sink:
-// 
+//
 // This is most likely something like
 //     ```
 //         move |data| { sink.add(data);};
@@ -191,6 +191,7 @@ impl ClientEndpointInterface for Client {
         E::Request: serde::Serialize + postcard_schema::Schema,
         E::Response: serde::de::DeserializeOwned,
     {
+        log::debug!("Calling rpc endpoint {}", E::PATH);
         let start = std::time::Instant::now();
         let seq = self
             .seq_no
@@ -235,6 +236,7 @@ impl ClientEndpointInterface for Client {
 
         // TODO; Handle timeout + connection closed
         let Ok((_hdr, response_body)) = response_future.await else {
+            log::warn!("Error waiting for response from microcontroller");
             return Err(WireError {});
         };
         let call_duration = std::time::Instant::now() - start;
