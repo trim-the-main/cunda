@@ -14,7 +14,7 @@ default:
 # Build the firmware in debug mode
 [working-directory('firmware')]
 build-firmware-debug:
-    DEFMT_LOG=debug cargo build
+    DEFMT_LOG=info,firmware=debug cargo build
 
 # Build the firmware in release mode
 [working-directory('firmware')]
@@ -24,7 +24,7 @@ build-firmware-release:
 # Run the firmware in debug mode (uses espflash runner from .cargo/config.toml)
 [working-directory('firmware')]
 run-firmware-debug:
-    DEFMT_LOG=debug cargo run
+    DEFMT_LOG=info,firmware=debug cargo run
 
 # Run the firmware in release mode
 [working-directory('firmware')]
@@ -40,4 +40,15 @@ run-firmware-release:
 run-flutter:
     flutter_rust_bridge_codegen generate --stop-on-error
     dart run build_runner build
-    flutter run
+    RUST_LOG=debug flutter run --dart-define="LOG_LEVEL=Fine"
+
+# Run the Flutter application
+[working-directory('cunda_flutter')]
+run-flutter-fast:
+    RUST_LOG=debug flutter run --dart-define="LOG_LEVEL=Fine"
+
+# Run the code generation only
+[working-directory('cunda_flutter')]
+codegen-flutter:
+    flutter_rust_bridge_codegen generate --stop-on-error
+    dart run build_runner build
