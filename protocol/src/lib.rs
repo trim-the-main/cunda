@@ -26,6 +26,20 @@ macro_rules! ProtocolStringType {
     };
 }
 
+#[cfg(feature = "flutter")]
+macro_rules! ProtocolVecType {
+    ($t:ty, $N:expr) => {
+        ::std::vec::Vec<$t>
+    };
+}
+
+#[cfg(not(feature = "flutter"))]
+macro_rules! ProtocolVecType {
+    ($t:ty, $N:expr) => {
+        ::heapless::Vec<$t, $N>
+    };
+}
+
 pub mod v1;
 
 // Re-export the latest version

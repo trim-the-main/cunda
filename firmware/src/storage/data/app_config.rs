@@ -2,7 +2,7 @@ use minicbor::{CborLen, Decode, Encode};
 
 use crate::storage::{
     data::DType,
-    value::{CachedDiskValue, DiskValueTrait},
+    value::{CachedDiskValue, KvStoreEntry},
 };
 
 pub static APP_CONFIG: CachedDiskValue<ApplicationConfig> = CachedDiskValue::new();
@@ -20,6 +20,6 @@ impl Default for ApplicationConfig {
     }
 }
 
-impl DiskValueTrait for ApplicationConfig {
+impl KvStoreEntry for ApplicationConfig {
     const KEY: DType = DType::ApplicationConfig;
 }

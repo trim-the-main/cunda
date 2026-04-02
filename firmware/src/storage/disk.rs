@@ -3,7 +3,6 @@ extern crate alloc;
 use alloc::vec::Vec;
 use core::ops::Range;
 
-use embassy_embedded_hal::adapter::BlockingAsync;
 use esp_bootloader_esp_idf::partitions;
 use esp_storage::{FlashStorage, FlashStorageError};
 use maitake_sync::Mutex;
@@ -12,13 +11,123 @@ use sequential_storage::{
     map::{MapConfig, MapStorage, SerializationError, Value},
 };
 
-use crate::storage::data::DType;
+use crate::storage::{data::DType, ota::OtaState, shared_async_flash::SharedAsyncFlashRegion};
 
-pub(super) static DISK: Mutex<Option<KvDisk<'static>>> = Mutex::new(None);
+const DATA_PARTITION_TYPE: u8 = 0x01;
+const KV_PARTITION_SUBTYPE: u8 = 0x06;
+pub(super) static KV_STORE: Mutex<Option<KvDisk<'static>>> = Mutex::new(None);
 
-pub async fn init(flash: FlashStorage<'static>) {
-    let mut d = DISK.lock().await;
-    *d = Some(KvDisk::new(flash))
+// The init function here is a bit convoluted because of the different traits each operation require.
+// We take this `FlashStorage<'static>` which is mainly a blocking type. The KV store needs an async
+// interface and OTA needs a reference to the entire flash region etc. So we initially create the OTA
+// object from esp_bootloader_esp_idf package temporarily. This reads the partition table finds the ota
+// data partition, reads and parses it. We only keep the "next_app_partition" (where should we write the
+// new bytes) and the ota state. Later we put the flash storage behind an async mutex. That way we can
+// share the flash storage between different async tasks. We initialize two global objects with a reference
+// to this mutex and the ranges of distinct partitions: KV store and OTA objects. OTA is just the slot to
+// write the incoming bytes from the postcard_rpc firmware upgrade.
+pub async fn init(
+    mut flash: FlashStorage<'static>,
+    sha: &'static Mutex<esp_hal::sha::Sha<'static>>,
+) {
+    let mut buffer = [0u8; partitions::PARTITION_TABLE_MAX_LEN];
+    let (next_app_partition, ota_state) = {
+        let mut ota_updater =
+            esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(&mut flash, &mut buffer)
+                .expect("Failed to initialize OtaUpdater");
+        let ota_state = match ota_updater.current_ota_state() {
+            Ok(esp_bootloader_esp_idf::ota::OtaImageState::New) => panic!(
+                "Bootloader must change new state to pendingVerify but it didn't. Bootloader may not have auto-rollback support"
+            ),
+            Ok(esp_bootloader_esp_idf::ota::OtaImageState::PendingVerify) => {
+                defmt::info!("Bootloader selected an Ota image in pending verify state");
+                OtaState::PendingVerify
+            }
+            Ok(esp_bootloader_esp_idf::ota::OtaImageState::Valid) => {
+                defmt::info!("Bootloader selected an Ota image in valid state");
+                OtaState::Ready
+            }
+            Ok(esp_bootloader_esp_idf::ota::OtaImageState::Invalid) => {
+                panic!("Bootloader must not boot an invalid app")
+            }
+            Ok(esp_bootloader_esp_idf::ota::OtaImageState::Aborted) => {
+                panic!("Bootloader must not boot an invalid app")
+            }
+            Ok(esp_bootloader_esp_idf::ota::OtaImageState::Undefined) => {
+                defmt::info!("Bootloader selected an Ota image with undefined state");
+                OtaState::Ready
+            }
+            Err(partitions::Error::InvalidState) => {
+                defmt::info!("Bootloader loaded factory partition. OTA data is erased");
+                OtaState::Ready
+            }
+            Err(err) => {
+                panic!("Failed to read OTA data partition {}", err);
+            }
+        };
+        (
+            ota_updater
+                .next_partition()
+                .expect("Storage error reading the OTA partition")
+                .1,
+            ota_state,
+        )
+    };
+
+    static DISK: static_cell::StaticCell<Mutex<FlashStorage<'static>>> =
+        static_cell::StaticCell::new();
+    let disk = &*DISK.init(Mutex::new(flash));
+
+    // Read the partition table, find the kv partition and the next ota partition ranges and initialize the
+    // kv store and OTA globals behind the mutexes. These will need the reference to the disk which is the
+    // underlying flash behind its own mutex.
+    let mut kv_partition_range = None;
+    let mut ota_new_firmware_range = None;
+    {
+        let mut flash = disk.lock().await;
+
+        let pt = esp_bootloader_esp_idf::partitions::read_partition_table(&mut *flash, &mut buffer)
+            .unwrap();
+
+        for entry in pt.iter() {
+            let begin = entry.offset();
+            let end = begin + entry.len();
+            if entry.raw_type() == DATA_PARTITION_TYPE
+                && entry.raw_subtype() == KV_PARTITION_SUBTYPE
+            {
+                kv_partition_range = Some(begin..end);
+            } else if matches!(
+                entry.partition_type(),
+                esp_bootloader_esp_idf::partitions::PartitionType::App(subtype) if subtype == next_app_partition
+            ) {
+                defmt::info!("OTA slot (the passive partition) {:X} {:X}", begin, end);
+                ota_new_firmware_range = Some(begin..end);
+            }
+        }
+    }
+
+    {
+        let mut d = KV_STORE.lock().await;
+        *d = Some(KvDisk::new(
+            disk,
+            kv_partition_range.expect("Did not find kv partition"),
+        ));
+    }
+
+    if let Some(ota_new_firmware_range) = ota_new_firmware_range {
+        let mut d = crate::storage::ota::OTA.lock().await;
+        *d = Some(crate::storage::ota::CundaOta::new(
+            ota_state,
+            SharedAsyncFlashRegion::try_new(
+                disk,
+                ota_new_firmware_range.start,
+                ota_new_firmware_range.end - ota_new_firmware_range.start,
+            )
+            .expect("ota partition cannot have zero size"),
+            next_app_partition,
+            sha,
+        ));
+    }
 }
 
 #[derive(Debug)]
@@ -29,23 +138,24 @@ pub enum DiskError {
 }
 
 pub(super) struct KvDisk<'d> {
-    ms: MapStorage<DType, BlockingAsync<FlashStorage<'d>>, HeapPageStateCache>,
+    ms: MapStorage<DType, SharedAsyncFlashRegion<'d, FlashStorage<'d>>, HeapPageStateCache>,
     buffer: Vec<u8>,
 }
 
 impl<'d> KvDisk<'d> {
     const BUFFER_SIZE: usize = 256;
 
-    pub(super) fn new(mut flash: FlashStorage<'d>) -> Self {
-        let kv_partition_range = find_kv_partition(&mut flash).unwrap();
-        let page_count = kv_partition_range.len() / (FlashStorage::SECTOR_SIZE as usize);
+    pub(super) fn new(flash: &'d Mutex<FlashStorage<'d>>, kv_partition_range: Range<u32>) -> Self {
+        let size = kv_partition_range.len();
+        let page_count = size / (FlashStorage::SECTOR_SIZE as usize);
 
         let mut buffer = Vec::with_capacity(Self::BUFFER_SIZE);
         buffer.resize(Self::BUFFER_SIZE, 0u8);
         Self {
             ms: MapStorage::new(
-                BlockingAsync::new(flash),
-                MapConfig::new(kv_partition_range),
+                SharedAsyncFlashRegion::try_new(flash, kv_partition_range.start, size as u32)
+                    .expect("Failed to initialize KV store"),
+                MapConfig::new(0..size as u32),
                 HeapPageStateCache::new(page_count),
             ),
             buffer,
@@ -129,20 +239,4 @@ impl sequential_storage::map::Key for DType {
         };
         Ok((dtype, len))
     }
-}
-
-fn find_kv_partition(flash: &mut FlashStorage) -> Result<Range<u32>, DiskError> {
-    const KV_PARTITION_MAGIC: u8 = 0x06;
-    use DiskError::*;
-    let mut buffer = [0u8; partitions::PARTITION_TABLE_MAX_LEN];
-    let pt = partitions::read_partition_table(flash, &mut buffer).unwrap();
-
-    for entry in pt.iter() {
-        if entry.raw_subtype() == KV_PARTITION_MAGIC {
-            let begin = entry.offset();
-            let end = begin + entry.len();
-            return Ok(begin..end);
-        }
-    }
-    Err(NoKVPartition)
 }

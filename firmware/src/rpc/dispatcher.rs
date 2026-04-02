@@ -356,8 +356,8 @@ impl SpawnContext for DispatchContext {
 // importing these handlers to the namespace because the `define_dispatch` macro does not match
 // fully qualified paths for handler functions, it expects identifiers
 use crate::rpc::ota::{
-    approve_firmware as ota_approve_firmware, finalize as ota_finalize, prepare as ota_prepare,
-    transfer_bytes as ota_transfer_bytes,
+    approve_firmware as ota_approve_firmware, factory_reset as ota_factory_reset,
+    finalize as ota_finalize, prepare as ota_prepare, transfer_bytes as ota_transfer_bytes,
 };
 use postcard_rpc::server::impls::embedded_io_async_v0_6::dispatch_impl::{WireSpawnImpl, spawn_fn};
 
@@ -384,6 +384,7 @@ define_dispatch! {
         | TransferOtaBytes    | async | ota_transfer_bytes   |
         | FinalizeOta         | async | ota_finalize         |
         | ApproveFirmware     | async | ota_approve_firmware |
+        | FactoryReset        | async | ota_factory_reset    |
         // Application Endpoints
         | GetApplSettings        | async             | get_appl_settings  |
         | SetApplSettings        | async             | set_appl_settings  |

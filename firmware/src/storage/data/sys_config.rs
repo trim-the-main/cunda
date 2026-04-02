@@ -4,7 +4,7 @@ use minicbor::{CborLen, Decode, Encode};
 
 use crate::storage::{
     data::DType,
-    value::{CachedDiskValue, DiskValueTrait},
+    value::{CachedDiskValue, KvStoreEntry},
 };
 
 pub static SYSTEM_CONFIG: CachedDiskValue<SysConfig> = CachedDiskValue::new();
@@ -21,6 +21,6 @@ impl Default for SysConfig {
         }
     }
 }
-impl DiskValueTrait for SysConfig {
+impl KvStoreEntry for SysConfig {
     const KEY: DType = DType::SysConfig;
 }

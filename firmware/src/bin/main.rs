@@ -69,8 +69,10 @@ async fn main(spawner: Spawner) -> ! {
 
     defmt::info!("Embassy initialized on Core 0");
 
+    static SHA: StaticCell<Mutex<esp_hal::sha::Sha<'static>>> = StaticCell::new();
+    let sha = SHA.init(Mutex::new(esp_hal::sha::Sha::new(peripherals.SHA)));
     let flash = esp_storage::FlashStorage::new(peripherals.FLASH).multicore_auto_park();
-    firmware::storage::init(flash).await;
+    firmware::storage::init(flash, sha).await;
 
     static APP_CORE_STACK: StaticCell<Stack<16384>> = StaticCell::new();
     let app_core_stack = APP_CORE_STACK.init(Stack::new());

@@ -756,6 +756,7 @@ pub async fn rpc_dispatcher_task(
                         let Some((hdr, body)) = VarHeader::take_from_slice(buf) else {
                             // TODO: send a nak on badly formed messages? We don't have
                             // much to say because we don't have a key or seq no or anything
+                            defmt::warn!("Bad message of size {}. Discarding...", buf.len());
                             continue;
                         };
                         let fut = d.handle(&tx, &hdr, body);

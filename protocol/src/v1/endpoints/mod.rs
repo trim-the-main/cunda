@@ -20,10 +20,11 @@ endpoints! {
     | StopSysStatsTopic   | NoArg       | EmptyRes               | "stop_sys_stats_topic"  |
     | GetMtu              | NoArg       | u16                    | "get_mtu"               |
     // OTA related endpoints
-    | PrepareOta          | OtaMData    | OtaState               | "prepare_ota"              |
-    | TransferOtaBytes    | OtaBytes    | OtaState               | "transfer_ota_bytes"       |
-    | FinalizeOta         | NoArg       | OtaState               | "finalize_ota"             |
-    | ApproveFirmware     | NoArg       | EmptyRes               | "approve_firmware_version" |
+    | PrepareOta          | OtaMData    | OtaResult              | "prepare_ota"              |
+    | TransferOtaBytes    | OtaBytes    | OtaResult              | "transfer_ota_bytes"       |
+    | FinalizeOta         | NoArg       | OtaResult              | "finalize_ota"             |
+    | ApproveFirmware     | NoArg       | OtaResult              | "approve_firmware_version" |
+    | FactoryReset        | NoArg       | OtaResult              | "factory_reset"            |
     // Application Endpoints
     | GetApplSettings         | NoArg             | ApplSettings       | "get_appl_settings"         |
     | SetApplSettings         | ApplSettings      | EmptyRes           | "set_appl_settings"         |
@@ -121,15 +122,19 @@ pub struct OtaMData {
 }
 
 #[derive(Serialize, Deserialize, Schema, Debug, Clone)]
-pub enum OtaState {
-    TransferReady(u32),
+pub enum OtaResult {
+    TransferReady,
     TransferComplete,
     Restarting,
+    StorageError,
+    VerificationError,
+    NotSupported,
 }
+
 #[derive(Serialize, Deserialize, Schema, Debug, Clone, Default)]
 pub struct OtaBytes {
     pub offset: u32,
-    pub data: heapless::Vec<u8, 1024>,
+    pub data: ProtocolVecType!(u8, 4096),
 }
 
 #[cfg(test)]

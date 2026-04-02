@@ -8,7 +8,13 @@ pub enum AccumulatorYieldError {
     NotACobsFrame,
 }
 
-pub const RX_BUF_SIZE: usize = 1024;
+// We want to accomodate 4096 bytes of data in OTA transfer so that we can
+// erase and write all at once. I am trying to quickly prevent write amplification
+// here. If this buffer size proves to be too large, another way is to read
+// the data first and only "erase" if they are not all 1s. This would allow smaller
+// buffer and prevent write amplification. +256 is for postcard overhead. Not a
+// calculated or optimized value.
+pub const RX_BUF_SIZE: usize = 4096 + 256;
 pub struct Accumulator<const N: usize> {
     buf: [u8; N],
     start_idx: usize,
