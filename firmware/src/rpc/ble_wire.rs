@@ -18,13 +18,11 @@ use serde::Serialize;
 use static_cell::{ConstStaticCell, StaticCell};
 use trouble_host::{gatt::GattConnection, prelude::*};
 
+use cobs_accumulator::{Accumulator, DecodeError};
+
 use crate::ble::constants::GATT_MSG_OVERHEAD;
-use crate::rpc::accumulator::{AccumulatorYieldError, RX_BUF_SIZE};
 use crate::rpc::dispatcher::BleDispatcher;
-use crate::{
-    ble::{BleRpcMessageBuffer, GattServerRpc, PeriphRole},
-    rpc::accumulator::Accumulator,
-};
+use crate::ble::{BleRpcMessageBuffer, GattServerRpc, PeriphRole};
 
 struct BleWireInner {
     server: GattServerRpc<'static>, // Holds the rpc_service and the characteristics
@@ -729,6 +727,9 @@ pub async fn rpc_dispatcher_task(
     tx: server::Sender<BleWireTx>,
     rx: Receiver<'static, CriticalSectionRawMutex, IncomingData, 16>,
 ) {
+    // We want to accommodate 4096 bytes of data in OTA transfer so that we can
+    // erase and write all at once. +256 is for postcard overhead.
+    const RX_BUF_SIZE: usize = 4096 + 256;
     let mut acc = Accumulator::<RX_BUF_SIZE>::new();
 
     loop {
@@ -739,11 +740,7 @@ pub async fn rpc_dispatcher_task(
                 // only error is no space for the message
                 // TODO: there is a case where we don't have enough space to put the entire
                 // new write_event data into the accumulator but maybe we can put enough to
-                // decode, process that frame, then put the remaning at the beginning. Handle
-                // that case later. I am confident that ergot cobs accumulator deals with that
-                // with minimal memcpy. The only problem with that is that I am okay to do one
-                // more memcpy so tha I can free the write_event back to the packet pool before
-                // the next await point.
+                // decode, process that frame, then put the remaning at the beginning.
                 acc.reset();
             }
             drop(w_event); // return the underlying buffer back to the PacketPool
@@ -754,8 +751,6 @@ pub async fn rpc_dispatcher_task(
                         defmt::debug!("Acc yielded a frame");
 
                         let Some((hdr, body)) = VarHeader::take_from_slice(buf) else {
-                            // TODO: send a nak on badly formed messages? We don't have
-                            // much to say because we don't have a key or seq no or anything
                             defmt::warn!("Bad message of size {}. Discarding...", buf.len());
                             continue;
                         };
@@ -770,16 +765,16 @@ pub async fn rpc_dispatcher_task(
                             }
                         }
                     }
-                    Err(AccumulatorYieldError::DecodingError) => continue, // try to decode the next package
-                    Err(AccumulatorYieldError::NotACobsFrame) => break,    // wait for more packets
+                    Err(DecodeError::DecodingError) => continue, // try to decode the next package
+                    Err(DecodeError::Incomplete) | Err(DecodeError::NoData) => break, // wait for more packets
                 }
             }
         }
     }
 }
 
-/// COPY AND PASTE FROM POSTCARD_RPC embedded_io_async impls
-///
+// COPY AND PASTE FROM POSTCARD_RPC
+//
 fn flava_flav(buf: &'_ mut [u8]) -> Result<Cobs<Slice<'_>>, WireTxErrorKind> {
     Cobs::try_new(Slice::new(buf)).map_err(|_| WireTxErrorKind::Other)
 }

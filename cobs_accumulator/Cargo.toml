@@ -1,0 +1,10 @@
+[package]
+name = "cobs_accumulator"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cobs = { version = "0.5.0", default-features = false }
+
+[dev-dependencies]
+cobs = { version = "0.5.0", features = ["use_std"] }

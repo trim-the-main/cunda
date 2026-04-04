@@ -5,7 +5,7 @@ use postcard_rpc::{Endpoint, Key, Topic, header, host_client::RpcFrame};
 use postcard_schema::Schema;
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::accumulator::Accumulator;
+use cobs_accumulator::Accumulator;
 
 #[derive(Debug)]
 pub struct WireError {}
