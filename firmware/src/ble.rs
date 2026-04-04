@@ -42,20 +42,6 @@ impl BleRpcMessageBuffer {
         return Some(retval);
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn try_encode_cobs(src: &[u8]) -> Option<Self> {
-        if src.len() > Self::MSG_SIZE - cobs::max_encoding_overhead(250) {
-            return None;
-        }
-        let mut retval: BleRpcMessageBuffer = Default::default();
-        let mut enc = cobs::CobsEncoder::new(&mut retval.msg);
-        if enc.push(src).is_err() {
-            return None;
-        }
-        retval.used_length = enc.finalize() + 1;
-        Some(retval)
-    }
-
     pub fn new() -> Self {
         Self {
             msg: [0u8; Self::MSG_SIZE],
