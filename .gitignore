@@ -12,7 +12,7 @@ cunda_flutter/test/**/*.mocks.dart
 
 # I will ignore .lock files for now and check it in later if needed
 cunda_flutter/pubspec.lock
-cunda_flutter/rust/Cargo.lock
+cunda_flutter/rust_lib_cunda_flutter/Cargo.lock
 protocol/Cargo.lock
 frb_prpc_juggle/Cargo.lock
 firmware/Cargo.lock
