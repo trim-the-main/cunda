@@ -93,12 +93,14 @@ async fn start_sys_stats_topic(
     };
     topic_stop_signal.try_take(); // clear the pending stop signals (we haven't responded to the start request yet.)
     let _guard = crate::stats::start_collecting_stats();
-    if sender
+    if let Err(err) = sender
         .reply::<StartSysStatsTopic>(header.seq_no, &(().into()))
         .await
-        .is_err()
     {
-        defmt::error!("Failed to reply to start_sys_stats_topic rpc message");
+        defmt::error!(
+            "Failed to reply to start_sys_stats_topic rpc message {}",
+            err
+        );
         return;
     }
 
@@ -106,12 +108,8 @@ async fn start_sys_stats_topic(
     loop {
         let stats = sys_stats();
 
-        if sender
-            .publish::<SysStatsTopic>(seq.into(), &stats)
-            .await
-            .is_err()
-        {
-            defmt::error!("Send error!");
+        if let Err(err) = sender.publish::<SysStatsTopic>(seq.into(), &stats).await {
+            defmt::error!("Send error! {}", err);
             break;
         }
         seq = seq.wrapping_add(1);

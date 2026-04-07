@@ -1,5 +1,5 @@
 use frb_prpc_juggle::client_interface::{
-    Client, ClientEndpointInterface, ClientTopicInterface, TopicSink, WireError,
+    Client, ClientEndpointInterface, ClientTopicInterface, FrbPostcardRpcError, TopicSink,
 };
 use postcard_rpc::Topic;
 use serde::de::DeserializeOwned;
@@ -31,7 +31,7 @@ impl FlutterClient {
     pub async fn rx_callback(
         &self,
         data: &[u8],
-    ) -> Result<(), ::frb_prpc_juggle::client_interface::WireError> {
+    ) -> Result<(), ::frb_prpc_juggle::client_interface::FrbPostcardRpcError> {
         self.inner.rx_callback(data).await
     }
 }
@@ -41,7 +41,7 @@ impl ClientEndpointInterface for FlutterClient {
         &self,
         req: E::Request,
     ) -> impl std::future::Future<
-        Output = Result<E::Response, ::frb_prpc_juggle::client_interface::WireError>,
+        Output = Result<E::Response, ::frb_prpc_juggle::client_interface::FrbPostcardRpcError>,
     > + Send
     where
         E::Request: serde::Serialize + postcard_schema::Schema + Send,
@@ -54,14 +54,14 @@ impl ClientEndpointInterface for FlutterClient {
 impl protocol::endpoints::EndpointDispatcher for FlutterClient {}
 
 impl ClientTopicInterface for FlutterClient {
-    async fn subscribe<T: Topic>(&self, sink: Box<dyn TopicSink>) -> Result<(), WireError>
+    async fn subscribe<T: Topic>(&self, sink: Box<dyn TopicSink>) -> Result<(), FrbPostcardRpcError>
     where
         T::Message: DeserializeOwned,
     {
         self.inner.subscribe::<T>(sink).await
     }
 
-    async fn unsubscribe<T: Topic>(&self) -> Result<(), WireError>
+    async fn unsubscribe<T: Topic>(&self) -> Result<(), FrbPostcardRpcError>
     where
         T::Message: DeserializeOwned,
     {

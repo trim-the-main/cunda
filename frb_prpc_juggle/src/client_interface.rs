@@ -1,6 +1,7 @@
 use core::sync::atomic;
 
 use maitake_sync::{Mutex, RwLock, WaitMap, wait_map::WakeOutcome};
+use postcard_rpc::standard_icd::WireError as RpcWireError;
 use postcard_rpc::{Endpoint, Key, Topic, header, host_client::RpcFrame};
 use postcard_schema::Schema;
 use serde::{Serialize, de::DeserializeOwned};
@@ -8,7 +9,14 @@ use serde::{Serialize, de::DeserializeOwned};
 use cobs_accumulator::Accumulator;
 
 #[derive(Debug)]
-pub struct WireError {}
+pub enum FrbPostcardRpcError {
+    InternalError,
+    OnlyOneDartStreamAllowed,
+    DeserializationError,
+    AlreadySubscribedtoTopic,
+    NotSubscribedToTopic,
+    RpcError(RpcWireError),
+}
 
 // These are the traits to juggle around the FRB limitation of not supporting
 // generics
@@ -16,7 +24,7 @@ pub trait ClientEndpointInterface {
     fn call_rpc_endpoint<E: Endpoint>(
         &self,
         req: E::Request,
-    ) -> impl core::future::Future<Output = Result<E::Response, WireError>> + Send
+    ) -> impl core::future::Future<Output = Result<E::Response, FrbPostcardRpcError>> + Send
     where
         E::Request: Serialize + Schema + Send,
         E::Response: DeserializeOwned;
@@ -26,12 +34,12 @@ pub trait ClientTopicInterface {
     fn subscribe<T: Topic>(
         &self,
         sink: Box<dyn TopicSink>,
-    ) -> impl std::future::Future<Output = Result<(), WireError>> + Send
+    ) -> impl std::future::Future<Output = Result<(), FrbPostcardRpcError>> + Send
     where
         T::Message: DeserializeOwned;
     fn unsubscribe<T: Topic>(
         &self,
-    ) -> impl std::future::Future<Output = Result<(), WireError>> + Send
+    ) -> impl std::future::Future<Output = Result<(), FrbPostcardRpcError>> + Send
     where
         T::Message: DeserializeOwned;
 }
@@ -45,7 +53,7 @@ pub trait ClientTopicInterface {
 // FRB generates StreamSink and the protocol crate generates (using macro and
 // generics) Topic types.
 pub trait TopicSink: Send + Sync {
-    fn parse_and_add(&self, msg: &[u8]) -> Result<(), WireError>;
+    fn parse_and_add(&self, msg: &[u8]) -> Result<(), FrbPostcardRpcError>;
 }
 
 // Send the vector of bytes to flutter to be transmitted over BLE
@@ -119,7 +127,7 @@ impl Default for Client {
 }
 
 impl Client {
-    pub async fn rx_callback(&self, data: &[u8]) -> Result<(), WireError> {
+    pub async fn rx_callback(&self, data: &[u8]) -> Result<(), FrbPostcardRpcError> {
         log::debug!("Rust side received data {:?}", data);
         let mut acc = self.rx_accumulator.lock().await;
         acc.feed(data).unwrap();
@@ -132,7 +140,7 @@ impl Client {
         // that waitmap keys on the complete VarHeader. topic handlers will wait on
         // the key alone. It's okay to lose some topic messages. In fact here, if we receive
         // multiple frames
-        while let Ok(frame) = acc.yield_frame() {
+        'frame_loop: while let Ok(frame) = acc.yield_frame() {
             let Some((hdr, body)) = header::VarHeader::take_from_slice(frame) else {
                 log::warn!("Problem with decoding an Rpc buffer");
                 continue; // TODO!
@@ -151,23 +159,33 @@ impl Client {
                 .rx_endpoint_response_futures
                 .wake(&hdr, (hdr, body.to_vec()))
             {
-                WakeOutcome::Woke => continue,
-                WakeOutcome::NoMatch(_) => {} // The header does not match a response that we were waiting for
-                WakeOutcome::Closed(_) => {} // TODO: This should probably error, why is the waker closed?
+                WakeOutcome::Woke => continue 'frame_loop,
+                WakeOutcome::NoMatch(_) => {} // The header does not match a response that we were waiting for, maybe a topic message
+                WakeOutcome::Closed(_) => return Err(FrbPostcardRpcError::InternalError), // should not happen
             }
 
             let topics = self.topics.read().await;
             for (key, topic_cb) in (*topics).iter() {
                 if hdr.key == header::VarKey::Key8(*key) {
                     topic_cb.parse_and_add(body)?; // should own a StreamSink, decode the message appropriately and put it in the stream
+                    continue 'frame_loop;
                 }
             }
+            // if we came here, we did not do anything with this frame, let's log it at least:
+            log::warn!(
+                "Did not understand this message: header: {:?} body: {:?}",
+                hdr,
+                body
+            );
         }
         Ok(())
     }
 
     // Send a frame using COBS encoding
-    pub async fn send(&self, frame: postcard_rpc::host_client::RpcFrame) -> Result<(), WireError> {
+    pub async fn send(
+        &self,
+        frame: postcard_rpc::host_client::RpcFrame,
+    ) -> Result<(), FrbPostcardRpcError> {
         log::debug!(
             "Sending rpc frame using COBS encoding {:?}",
             frame.to_bytes()
@@ -186,7 +204,7 @@ impl ClientEndpointInterface for Client {
     async fn call_rpc_endpoint<E: postcard_rpc::Endpoint>(
         &self,
         req: E::Request,
-    ) -> Result<E::Response, WireError>
+    ) -> Result<E::Response, FrbPostcardRpcError>
     where
         E::Request: serde::Serialize + postcard_schema::Schema,
         E::Response: serde::de::DeserializeOwned,
@@ -218,8 +236,6 @@ impl ClientEndpointInterface for Client {
         // otherwise there's a window where the response arrives but nobody is waiting for it.
 
         // compose the response header that we will wait on:
-        // TOOD: errors
-        // TODO: is it okay that we are expecting a different size key for example?
         let key_kind = header::VarKeyKind::Key8;
         let mut resp_key = header::VarKey::Key8(E::RESP_KEY);
         resp_key.shrink_to(key_kind);
@@ -227,38 +243,61 @@ impl ClientEndpointInterface for Client {
             key: resp_key,
             seq_no: frame.header.seq_no,
         };
+        let err_resp_header = header::VarHeader {
+            key: postcard_rpc::header::VarKey::Key8(postcard_rpc::standard_icd::ERROR_KEY),
+            seq_no: frame.header.seq_no,
+        };
 
-        let response_future = self.rx_endpoint_response_futures.wait(ok_resp_header);
-        let mut response_future = Box::pin(response_future);
-        response_future.as_mut().subscribe().await.unwrap();
+        let ok_response_future = self.rx_endpoint_response_futures.wait(ok_resp_header);
+        let rpc_error_future = self.rx_endpoint_response_futures.wait(err_resp_header);
+        let mut ok_response_future = Box::pin(ok_response_future);
+        let mut rpc_error_future = Box::pin(rpc_error_future);
+        ok_response_future.as_mut().subscribe().await.unwrap();
+        rpc_error_future.as_mut().subscribe().await.unwrap();
 
         self.send(frame).await?;
 
         // TODO; Handle timeout + connection closed
-        let Ok((_hdr, response_body)) = response_future.await else {
-            log::warn!("Error waiting for response from microcontroller");
-            return Err(WireError {});
+        tokio::select! {
+            o = ok_response_future => {
+                let response_body = match o {
+                    Ok((_hdr, body)) => body,
+                    Err(wait_error) => {
+                        log::warn!(
+                            "Error waiting for response from microcontroller, {}",
+                        wait_error
+                    );
+                    return Err(FrbPostcardRpcError::InternalError);
+                }
+            };
+            let call_duration = std::time::Instant::now() - start;
+            log::debug!("{} took {:?}", E::PATH, call_duration);
+            return postcard::from_bytes(&response_body).map_err(|_err| FrbPostcardRpcError::DeserializationError);
+            },
+            e = rpc_error_future => {
+                let (_hdr, resp) = e.map_err(|_err| FrbPostcardRpcError::InternalError)?;
+
+                let err = postcard::from_bytes::<postcard_rpc::standard_icd::WireError>(&resp).map_err(|_err| FrbPostcardRpcError::DeserializationError)?;
+                return Err(FrbPostcardRpcError::RpcError(err));
+            },
         };
-        let call_duration = std::time::Instant::now() - start;
-        log::debug!("{} took {:?}", E::PATH, call_duration);
-        postcard::from_bytes(&response_body).map_err(|_err| WireError {})
     }
 }
 
 impl ClientTopicInterface for Client {
-    async fn subscribe<T: Topic>(&self, sink: Box<dyn TopicSink>) -> Result<(), WireError>
+    async fn subscribe<T: Topic>(&self, sink: Box<dyn TopicSink>) -> Result<(), FrbPostcardRpcError>
     where
         T::Message: DeserializeOwned,
     {
         let mut topics = self.topics.write().await;
         if topics.iter().any(|(k, _)| *k == T::TOPIC_KEY) {
-            return Err(WireError {});
+            return Err(FrbPostcardRpcError::AlreadySubscribedtoTopic);
         }
         topics.push((T::TOPIC_KEY, sink));
         Ok(())
     }
 
-    async fn unsubscribe<T: Topic>(&self) -> Result<(), WireError>
+    async fn unsubscribe<T: Topic>(&self) -> Result<(), FrbPostcardRpcError>
     where
         T::Message: DeserializeOwned,
     {
@@ -267,6 +306,6 @@ impl ClientTopicInterface for Client {
             topics.remove(index);
             return Ok(());
         }
-        Err(WireError {})
+        Err(FrbPostcardRpcError::NotSubscribedToTopic)
     }
 }

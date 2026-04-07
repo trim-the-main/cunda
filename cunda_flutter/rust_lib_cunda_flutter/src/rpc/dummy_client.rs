@@ -1,7 +1,5 @@
 /// For manual testing without BLE connection
-/// 
-
-
+///
 use std::{
     collections::HashMap,
     str::FromStr,
@@ -9,7 +7,7 @@ use std::{
 };
 
 use frb_prpc_juggle::client_interface::{
-    ClientEndpointInterface, ClientTopicInterface, TopicSink, WireError
+    ClientEndpointInterface, ClientTopicInterface, FrbPostcardRpcError, TopicSink,
 };
 use postcard_rpc::{Key, Topic};
 use protocol::{endpoints::*, topics::*, v1::*};
@@ -50,10 +48,7 @@ impl DummyFlutterProtocolClient {
     #[flutter_rust_bridge::frb(sync)]
     pub fn init(&mut self, _sink: StreamSink<Vec<u8>>) {}
 
-    pub async fn rx_callback(
-        &self,
-        data: &[u8],
-    ) -> Result<(), WireError> {
+    pub async fn rx_callback(&self, data: &[u8]) -> Result<(), FrbPostcardRpcError> {
         log::trace!("RUST RECEIVED DATA: {:?}", data);
         Ok(())
     }
@@ -75,12 +70,12 @@ impl ClientEndpointInterface for DummyFlutterProtocolClient {
     async fn call_rpc_endpoint<E: postcard_rpc::Endpoint>(
         &self,
         _req: E::Request,
-    ) -> Result<E::Response, WireError>
+    ) -> Result<E::Response, FrbPostcardRpcError>
     where
         E::Request: serde::Serialize + postcard_schema::Schema + Send,
         E::Response: serde::de::DeserializeOwned,
     {
-        Err(WireError {})
+        Err(FrbPostcardRpcError::InternalError)
     }
 }
 
@@ -88,30 +83,19 @@ impl EndpointDispatcher for DummyFlutterProtocolClient {
     async fn get_firmware_version(
         &self,
         _req: NoArg,
-    ) -> ::core::result::Result<
-        VersionString,
-    WireError,
-    > {
+    ) -> Result<VersionString, FrbPostcardRpcError> {
         log::debug!("Get firmware version called");
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
         Ok(String::from_str("v0.0.1").unwrap())
     }
 
-    async fn get_sys_settings(
-        &self,
-        _req: NoArg,
-    ) -> ::core::result::Result<SysSettings, WireError>
-    {
+    async fn get_sys_settings(&self, _req: NoArg) -> Result<SysSettings, FrbPostcardRpcError> {
         log::debug!("Get sys settings called");
         tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
         Ok(self.current_system_settings.lock().await.clone())
     }
 
-    async fn set_sys_settings(
-        &self,
-        req: SysSettings,
-    ) -> ::core::result::Result<EmptyRes, WireError>
-    {
+    async fn set_sys_settings(&self, req: SysSettings) -> Result<EmptyRes, FrbPostcardRpcError> {
         log::debug!("Set sys settings called setting to: {:?}", req);
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
         {
@@ -122,11 +106,7 @@ impl EndpointDispatcher for DummyFlutterProtocolClient {
         Ok(EmptyRes {})
     }
 
-    async fn ping_endpoint(
-        &self,
-        _req: NoArg,
-    ) -> ::core::result::Result<EmptyRes, WireError>
-    {
+    async fn ping_endpoint(&self, _req: NoArg) -> Result<EmptyRes, FrbPostcardRpcError> {
         let random_millisecs = {
             let mut rng = rand::rng();
             rng.random_range(100..500)
@@ -136,11 +116,7 @@ impl EndpointDispatcher for DummyFlutterProtocolClient {
         Ok(EmptyRes {})
     }
 
-    async fn start_sys_stats_topic(
-        &self,
-        _req: NoArg,
-    ) -> ::core::result::Result<EmptyRes, WireError>
-    {
+    async fn start_sys_stats_topic(&self, _req: NoArg) -> Result<EmptyRes, FrbPostcardRpcError> {
         log::debug!("Start sys stats topic called");
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
         if let Some(running) = self
@@ -152,15 +128,11 @@ impl EndpointDispatcher for DummyFlutterProtocolClient {
             running.store(true, std::sync::atomic::Ordering::Release);
             Ok(EmptyRes {})
         } else {
-            Err(WireError {})
+            Err(FrbPostcardRpcError::InternalError)
         }
     }
 
-    async fn stop_sys_stats_topic(
-        &self,
-        _req: NoArg,
-    ) -> ::core::result::Result<EmptyRes, WireError>
-    {
+    async fn stop_sys_stats_topic(&self, _req: NoArg) -> Result<EmptyRes, FrbPostcardRpcError> {
         log::debug!("Stop sys stats topic called");
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
         if let Some(flag) = self
@@ -172,27 +144,17 @@ impl EndpointDispatcher for DummyFlutterProtocolClient {
             flag.store(false, std::sync::atomic::Ordering::Release);
             Ok(EmptyRes {})
         } else {
-            Err(WireError {})
+            Err(FrbPostcardRpcError::InternalError)
         }
     }
 
-    async fn get_appl_settings(
-        &self,
-        _req: NoArg,
-    ) -> ::core::result::Result<
-        ApplSettings,
-    WireError,
-    > {
+    async fn get_appl_settings(&self, _req: NoArg) -> Result<ApplSettings, FrbPostcardRpcError> {
         log::debug!("Get appl settings called");
         tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
         Ok(self.current_application_settings.lock().await.clone())
     }
 
-    async fn set_appl_settings(
-        &self,
-        req: ApplSettings,
-    ) -> ::core::result::Result<EmptyRes, WireError>
-    {
+    async fn set_appl_settings(&self, req: ApplSettings) -> Result<EmptyRes, FrbPostcardRpcError> {
         log::debug!("Set appl settings called");
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
         {
@@ -202,11 +164,7 @@ impl EndpointDispatcher for DummyFlutterProtocolClient {
         Ok(EmptyRes {})
     }
 
-    async fn blink_led_endpoint(
-        &self,
-        req: u8,
-    ) -> ::core::result::Result<EmptyRes, WireError>
-    {
+    async fn blink_led_endpoint(&self, req: u8) -> Result<EmptyRes, FrbPostcardRpcError> {
         log::debug!("Blink led endpoint called");
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
         let blink_time_ms = self
@@ -227,20 +185,18 @@ impl ClientTopicInterface for DummyFlutterProtocolClient {
     async fn subscribe<T: Topic>(
         &self,
         _sink: Box<dyn TopicSink>,
-    ) -> Result<(), WireError>
+    ) -> Result<(), FrbPostcardRpcError>
     where
         T::Message: DeserializeOwned,
     {
-        Err(WireError {})
+        Err(FrbPostcardRpcError::AlreadySubscribedtoTopic)
     }
 
-    async fn unsubscribe<T: Topic>(
-        &self,
-    ) -> Result<(), WireError>
+    async fn unsubscribe<T: Topic>(&self) -> Result<(), FrbPostcardRpcError>
     where
         T::Message: DeserializeOwned,
     {
-        Err(WireError {})
+        Err(FrbPostcardRpcError::NotSubscribedToTopic)
     }
 }
 
@@ -285,10 +241,10 @@ impl TopicDispatcher for DummyFlutterProtocolClient {
     async fn create_sys_stats_topic_stream(
         &self,
         sink: StreamSink<SysStats>,
-    ) -> Result<(), WireError> {
+    ) -> Result<(), FrbPostcardRpcError> {
         let mut streams_running_status_guard = self.streams_running_status.lock().await;
         if streams_running_status_guard.contains_key(&SysStatsTopic::TOPIC_KEY) {
-            return Err(WireError {});
+            return Err(FrbPostcardRpcError::AlreadySubscribedtoTopic);
         }
         let sys_stream = PeriodicTopicOutput::<SysStats, _>::new(
             [
@@ -337,7 +293,7 @@ impl TopicDispatcher for DummyFlutterProtocolClient {
     async fn create_button_events_stream(
         &self,
         sink: StreamSink<ButtonEvent>,
-    ) -> Result<(), WireError> {
+    ) -> Result<(), FrbPostcardRpcError> {
         let button_stream = PeriodicTopicOutput::<ButtonEvent, _>::new(
             [
                 ButtonEvent {
