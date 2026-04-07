@@ -39,7 +39,6 @@ use protocol::{
 frb_prpc_juggle::topic_dispatcher_trait! {
     trait_name = TopicDispatcher;
     sink_type = StreamSink;
-    version = "1";
     | TopicTy       | MessageTy
     | -------       | ---------
     | SysStatsTopic | SysStats
