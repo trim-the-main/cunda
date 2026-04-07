@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 pub type VersionString = ProtocolStringType!(capacity: 16);
 endpoints! {
     list = ENDPOINT_LIST;
-    omit_std = true;
     // System Endpoints
     | EndpointTy          | RequestTy   | ResponseTy             | Path                    |
     | ----------          | ---------   | ----------             | ----                    |
