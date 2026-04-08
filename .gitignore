@@ -17,6 +17,7 @@ protocol/Cargo.lock
 frb_prpc_juggle/Cargo.lock
 firmware/Cargo.lock
 cobs_accumulator/Cargo.lock
+postcard-rpc-ble/Cargo.lock
 
 # FLUTTER_RUST_BRIDGE_CODEGEN generated .gitignore
 

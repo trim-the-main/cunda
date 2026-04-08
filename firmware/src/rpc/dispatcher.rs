@@ -16,7 +16,7 @@ use protocol::{
     v1::{MemoryUsage, SysStats},
 };
 
-use crate::rpc::ble_wire::BleWireTx;
+use postcard_rpc_ble::BleWireTx;
 
 async fn get_firmware_version(
     _context: &mut DispatchContext,
@@ -81,7 +81,7 @@ async fn start_sys_stats_topic(
     context: DispatchSpawnContext,
     header: VarHeader,
     _rqst: NoArg,
-    sender: Sender<BleWireTx>,
+    sender: Sender<BleWireTx<'static, 'static, 'static>>,
 ) {
     defmt::debug!("Handling start_sys_stats_topic");
     let Some((_key, topic_stop_signal)) = context
@@ -196,7 +196,10 @@ async fn blink_led_n_times(
 }
 
 const DEBOUNCE_TIME_MS: u64 = 20;
-async fn button_events_topic_worker(button: &Mutex<Input<'static>>, sender: Sender<BleWireTx>) {
+async fn button_events_topic_worker(
+    button: &Mutex<Input<'static>>,
+    sender: Sender<BleWireTx<'static, 'static, 'static>>,
+) {
     let mut seq = 0u8;
     loop {
         let pressed_for = {
@@ -231,7 +234,7 @@ async fn start_button_events_topic(
     context: DispatchSpawnContext,
     header: VarHeader,
     _rqst: NoArg,
-    sender: Sender<BleWireTx>,
+    sender: Sender<BleWireTx<'static, 'static, 'static>>,
 ) {
     defmt::debug!("Handling start_button_events_topic");
     let Some((_key, topic_stop_signal)) = context
@@ -318,14 +321,14 @@ pub(crate) struct DispatchContext {
     task_table: TopicTaskTable,
     pub(crate) button: &'static Mutex<Input<'static>>,
     pub(crate) led: Output<'static>,
-    tx: BleWireTx,
+    tx: BleWireTx<'static, 'static, 'static>,
 }
 
 impl DispatchContext {
     pub fn new(
         button: &'static Mutex<Input<'static>>,
         led: Output<'static>,
-        tx: BleWireTx,
+        tx: BleWireTx<'static, 'static, 'static>,
     ) -> Self {
         Self {
             task_table: &TOPIC_TASK_STATE,
@@ -362,7 +365,7 @@ use postcard_rpc::server::impls::embedded_io_async_v0_6::dispatch_impl::{WireSpa
 define_dispatch! {
     app: BleDispatcher;
     spawn_fn: spawn_fn;
-    tx_impl: BleWireTx;
+    tx_impl: BleWireTx<'static, 'static, 'static>;
     spawn_impl: WireSpawnImpl;
     context: DispatchContext;
 

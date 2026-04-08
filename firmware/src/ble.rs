@@ -1,100 +1,24 @@
 use embassy_executor::{Spawner, SpawnerTraceExt};
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::channel::Channel;
+use embassy_time::Duration;
 use esp_hal::gpio::{Input, Output};
 use esp_radio::ble::Config;
 use esp_radio::ble::controller::BleConnector;
 
 use maitake_sync::Mutex;
-use postcard_rpc::server::Sender;
+use postcard_rpc::server::{Dispatch, Sender};
+use postcard_rpc_ble::{BleWireTx, DispatcherRunner, PrpcBleConn, PrpcBleStorage};
 use static_cell::StaticCell;
 use trouble_host::prelude::*;
 
-use postcard_rpc::server::Dispatch;
+use crate::rpc::dispatcher::{BleDispatcher, DispatchContext};
 
 pub(crate) mod constants {
     pub(crate) const CONNECTIONS_MAX: usize = 1;
     pub(crate) const L2CAP_CHANNELS_MAX: usize = 2;
     pub(crate) const N_CMD_SLOTS: usize = 8;
-    pub(crate) const MSG_MTU: usize = 255;
-    pub(crate) const GATT_MSG_OVERHEAD: usize = 3;
 }
 
 use crate::ble::constants::*;
-use crate::rpc::ble_wire::{BleWireStorage, IncomingData, rpc_dispatcher_task};
-use crate::rpc::dispatcher::{BleDispatcher, DispatchContext};
-
-pub struct BleRpcMessageBuffer {
-    pub msg: [u8; Self::MSG_SIZE],
-    pub used_length: usize,
-}
-
-impl BleRpcMessageBuffer {
-    pub(crate) const MSG_SIZE: usize = MSG_MTU - GATT_MSG_OVERHEAD;
-
-    pub(crate) fn try_from_slice(src: &[u8]) -> Option<Self> {
-        let mut retval: BleRpcMessageBuffer = Default::default();
-        if src.len() > retval.msg.len() {
-            return None;
-        }
-        retval.msg[..src.len()].copy_from_slice(src);
-        retval.used_length = src.len();
-        return Some(retval);
-    }
-
-    pub fn new() -> Self {
-        Self {
-            msg: [0u8; Self::MSG_SIZE],
-            used_length: 0,
-        }
-    }
-}
-
-impl Default for BleRpcMessageBuffer {
-    fn default() -> Self {
-        Self {
-            msg: [0u8; Self::MSG_SIZE],
-            used_length: 0,
-        }
-    }
-}
-
-impl AsGatt for BleRpcMessageBuffer {
-    fn as_gatt(&self) -> &[u8] {
-        &self.msg[0..self.used_length]
-    }
-
-    const MIN_SIZE: usize = 0;
-
-    const MAX_SIZE: usize = Self::MSG_SIZE;
-}
-
-impl FromGatt for BleRpcMessageBuffer {
-    fn from_gatt(data: &[u8]) -> Result<Self, trouble_host::types::gatt_traits::FromGattError> {
-        let mut msg = [0u8; Self::MSG_SIZE];
-        msg[..data.len()].copy_from_slice(data);
-        Ok(Self {
-            msg,
-            used_length: data.len(),
-        })
-    }
-}
-
-#[gatt_service(uuid = "408813DF-5DD4-1F87-EC11-CDB001100000")]
-pub struct RpcService {
-    #[descriptor(uuid = descriptors::MEASUREMENT_DESCRIPTION, name = "rx", read, value = "rx buffer")]
-    #[characteristic(uuid = "408813df-5dd4-1f87-ec11-cdb001100001", write)]
-    pub rx: BleRpcMessageBuffer,
-
-    #[descriptor(uuid = descriptors::MEASUREMENT_DESCRIPTION, name = "tx", read, value = "tx buffer")]
-    #[characteristic(uuid = "408813df-5dd4-1f87-ec11-cdb001100002", indicate)]
-    pub tx: BleRpcMessageBuffer,
-}
-
-#[gatt_server(mutex_type = CriticalSectionRawMutex)]
-pub struct GattServerRpc {
-    pub rpc_service: RpcService,
-}
 
 pub(crate) type PeriphRole =
     Peripheral<'static, ExternalController<BleConnector<'static>, N_CMD_SLOTS>, DefaultPacketPool>;
@@ -133,10 +57,19 @@ pub async fn ble_init(
     spawner
         .spawn_named("BleBackendTask", ble_backend_task(runner))
         .expect("Failed to spawn BleBackendTask");
+
+    // Initialize the RPC transport
+    static PRPC: StaticCell<PrpcBleStorage<1>> = StaticCell::new();
+    let prpc = PRPC.init(PrpcBleStorage::new(PeripheralConfig {
+        name: "PostcardRPC",
+        appearance: &appearance::power_device::GENERIC_POWER_DEVICE,
+    }));
+    let (conn, d_runner, tx) = prpc.init();
+
     spawner
         .spawn_named(
             "BleFrontendTask",
-            ble_frontend_task(peripheral, spawner, button, led),
+            ble_frontend_task(conn, peripheral, spawner, button, led, tx, d_runner),
         )
         .expect("Failed to spawn BleFrontendTask");
 }
@@ -159,32 +92,93 @@ pub async fn ble_backend_task(
 
 #[embassy_executor::task]
 pub async fn ble_frontend_task(
-    ble_periph_role: Peripheral<
-        'static,
-        ExternalController<BleConnector<'static>, N_CMD_SLOTS>,
-        DefaultPacketPool,
-    >,
+    mut conn: PrpcBleConn<'static, 'static, 'static, 1>,
+    mut periph: PeriphRole,
     spawner: Spawner,
     button: &'static Mutex<Input<'static>>,
     led: Output<'static>,
+    tx: BleWireTx<'static, 'static, 'static>,
+    d_runner: DispatcherRunner<'static, 'static, 'static, 1>,
 ) {
-    static BLE_WIRE_STORAGE: BleWireStorage = BleWireStorage::new();
-    static RX_CHANNEL: Channel<CriticalSectionRawMutex, IncomingData, 16> = Channel::new();
-
-    let (mut rx_impl, tx_impl) = BLE_WIRE_STORAGE.init(ble_periph_role, &RX_CHANNEL);
-
-    let context = DispatchContext::new(button, led, tx_impl.clone());
+    // Create and spawn the dispatcher task
+    let context = DispatchContext::new(button, led, tx.clone());
     let dispatcher = BleDispatcher::new(context, spawner.into());
     let vkk = dispatcher.min_key_len();
 
     spawner.must_spawn(rpc_dispatcher_task(
+        d_runner,
         dispatcher,
-        Sender::new(tx_impl.clone(), vkk),
-        RX_CHANNEL.receiver(),
+        Sender::new(tx, vkk),
     ));
 
+    // Connection lifecycle loop
     loop {
-        rx_impl.wait_connection().await;
-        let _ = rx_impl.work_on_connection().await;
+        let sys_config = crate::storage::SYSTEM_CONFIG.get_or_default().await;
+        match advertise_once(&mut periph, &sys_config.ble_adv_name).await {
+            Ok(connection) => {
+                if conn.on_connected(connection).await.is_ok() {
+                    let _ = conn.run().await;
+                }
+                conn.on_disconnected().await;
+            }
+            Err(err) => {
+                defmt::warn!(
+                    "Keep on advertising, `advertiser.accept()` returned Error: {:?}",
+                    err
+                );
+            }
+        }
     }
+}
+
+const ADV_TIMEOUT: Duration = Duration::from_secs(2);
+
+async fn advertise_once(
+    periph: &mut PeriphRole,
+    adv_name: &str,
+) -> Result<Connection<'static, DefaultPacketPool>, Error> {
+    let mut advertiser_data = [0; 31];
+    let adv_size = AdStructure::encode_slice(
+        &[
+            AdStructure::Flags(LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED),
+            AdStructure::CompleteLocalName(adv_name.as_bytes()),
+            AdStructure::ManufacturerSpecificData {
+                company_identifier: (0x8472), // TIRB
+                payload: (&[]),
+            },
+        ],
+        &mut advertiser_data[..],
+    )
+    .expect("Failed encoding advertiser data.");
+    let mut params: AdvertisementParameters = Default::default();
+    params.timeout = Some(ADV_TIMEOUT);
+
+    defmt::info!(
+        "Advertising and waiting for a connection adv_size {}",
+        adv_size
+    );
+    let advertiser = periph
+        .advertise(
+            &params,
+            Advertisement::ConnectableScannableUndirected {
+                adv_data: &advertiser_data[..adv_size],
+                scan_data: &[],
+            },
+        )
+        .await
+        .expect("Advertising failed, panicing");
+
+    advertiser.accept().await
+}
+
+// OTA transfers can be up to 4096 bytes + postcard overhead
+const RX_BUF_SIZE: usize = 4096 + 256;
+
+#[embassy_executor::task]
+async fn rpc_dispatcher_task(
+    runner: DispatcherRunner<'static, 'static, 'static, 1>,
+    mut dispatcher: BleDispatcher,
+    tx: Sender<BleWireTx<'static, 'static, 'static>>,
+) {
+    runner.run::<_, RX_BUF_SIZE>(&mut dispatcher, tx).await;
 }
