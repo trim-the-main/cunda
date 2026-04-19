@@ -92,10 +92,13 @@ pub struct Client {
     // so what we do is to wait for the first response of the microcontroller and find the value there, update
     // our copy and keep going from there.
     key_kind: RwLock<header::VarKeyKind>,
+    // Serialize RPC calls so only one is on the wire at a time.
+    // Don't overwhelm the firmware
+    rpc_in_flight: tokio::sync::Mutex<()>,
 }
 
 impl Client {
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             tx_sink: None,
             rx_accumulator: Mutex::new(Accumulator::new()),
@@ -103,6 +106,7 @@ impl Client {
             topics: RwLock::new(Vec::new()),
             seq_no: atomic::AtomicU32::new(0),
             key_kind: RwLock::new(header::VarKeyKind::Key8),
+            rpc_in_flight: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -255,6 +259,8 @@ impl ClientEndpointInterface for Client {
         ok_response_future.as_mut().subscribe().await.unwrap();
         rpc_error_future.as_mut().subscribe().await.unwrap();
 
+        // Until we get a response nobody else sends anything
+        let _guard = self.rpc_in_flight.lock().await;
         self.send(frame).await?;
 
         // TODO; Handle timeout + connection closed

@@ -45,9 +45,6 @@ class _BandwidthTabPageState extends ConsumerState<BandwidthTabPage> {
             onToggle: () {
               setState(() {
                 _isUpstreamRunning = !_isUpstreamRunning;
-                if (!_isUpstreamRunning) {
-                  ref.invalidate(upstreamBandwidthProvider(widget.device));
-                }
               });
             },
           ),
