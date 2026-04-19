@@ -59,9 +59,9 @@ impl Consumer {
     // being updated.
     unsafe fn finish(&self, now: Instant) {
         let inner = unsafe { &mut *self.inner.get() };
-        assert!(now > inner.begin);
-        // defmt::info!("Finished on {} it ran {}", self.id, now - inner.begin);
-        inner.runtime_curr_epoch += now - inner.begin;
+        if now > inner.begin {
+            inner.runtime_curr_epoch += now - inner.begin;
+        }
         // defmt::info!("We ran {} in this window", inner.runtime_curr_epoch);
         inner.begin = Instant::MAX;
     }
