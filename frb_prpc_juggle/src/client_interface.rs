@@ -128,7 +128,7 @@ impl Default for Client {
 
 impl Client {
     pub async fn rx_callback(&self, data: &[u8]) -> Result<(), FrbPostcardRpcError> {
-        log::debug!("Rust side received data {:?}", data);
+        log::trace!("Rust side received data {:?}", data);
         let mut acc = self.rx_accumulator.lock().await;
         acc.feed(data).unwrap();
 
@@ -186,13 +186,13 @@ impl Client {
         &self,
         frame: postcard_rpc::host_client::RpcFrame,
     ) -> Result<(), FrbPostcardRpcError> {
-        log::debug!(
+        log::trace!(
             "Sending rpc frame using COBS encoding {:?}",
             frame.to_bytes()
         );
         let mut frame = cobs::encode_vec(&frame.to_bytes());
         frame.push(0); // COBS delimiter
-        log::debug!("Encoded version {:?}", frame);
+        log::trace!("Encoded version {:?}", frame);
         if let Some(sink) = &self.tx_sink {
             sink(frame);
         }

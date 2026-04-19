@@ -21,7 +21,7 @@ impl FlutterClient {
     #[flutter_rust_bridge::frb(sync)]
     pub fn init(&mut self, sink: StreamSink<Vec<u8>>) {
         self.inner.init(Box::new(move |data| {
-            log::info!("Sending data from rust to flutter {:?}", data);
+            log::trace!("Sending data from rust to flutter {:?}", data);
             if let Err(e) = sink.add(data) {
                 todo!("Error sending data to flutter: {:?}", e);
             }
