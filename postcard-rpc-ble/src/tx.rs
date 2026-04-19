@@ -206,12 +206,38 @@ async fn flush_buffer<const SIZE: usize>(
     while let Some(ch) = flush_iter.next() {
         let chunk_data = ch;
         let is_last = flush_iter.peek().is_none();
+        let needs_ack = chunk_data.iter().any(|b| *b == 0);
         if !is_last {
             defmt::debug!("Using unreliable send before the last chunk");
-            let res = sender.send_chunk_unreliable(chunk_data).await;
+            let res = if needs_ack {
+                match ack_q
+                    .wait_once_with(async || {
+                        match ack_q.set_data_inflight() {
+                            Ok(_) => {}
+                            Err(_) => {
+                                return ack_q.process_disconnect();
+                            }
+                        }
+                        match sender.send_chunk_reliable(chunk_data).await {
+                            Ok(_) => {}
+                            Err(_) => {
+                                defmt::debug!("Error sending chunk");
+                                ack_q.process_disconnect();
+                            }
+                        }
+                    })
+                    .await
+                {
+                    WakeReason::Ack => Ok(()),
+                    WakeReason::Disconnected => Err(()),
+                }
+            } else {
+                sender.send_chunk_unreliable(chunk_data).await
+            };
             if res.is_err() {
                 defmt::error!("Error sending chunk using a ble notification");
                 ack_q.process_disconnect();
+                tx_buffer.reset();
                 return WakeReason::Disconnected;
             }
         } else {
