@@ -12,11 +12,11 @@ use postcard_rpc::{
 };
 use protocol::{
     endpoints::*,
-    topics::{ButtonEvent, ButtonEvents, SysStatsTopic},
+    topics::{
+        BandwidthTestTopic, BandwidthTestTopicData, ButtonEvent, ButtonEvents, SysStatsTopic,
+    },
     v1::{MemoryUsage, SysStats},
 };
-
-use postcard_rpc_ble::BleWireTx;
 
 async fn get_firmware_version(
     _context: &mut DispatchContext,
@@ -81,7 +81,7 @@ async fn start_sys_stats_topic(
     context: DispatchSpawnContext,
     header: VarHeader,
     _rqst: NoArg,
-    sender: Sender<BleWireTx<'static, 'static, 'static>>,
+    sender: Sender<BleWireTxImpl>,
 ) {
     defmt::debug!("Handling start_sys_stats_topic");
     let Some((_key, topic_stop_signal)) = context
@@ -157,6 +157,7 @@ async fn get_appl_settings(
     }
     a_settings
 }
+
 async fn set_appl_settings(
     _context: &mut DispatchContext,
     _header: VarHeader,
@@ -196,10 +197,7 @@ async fn blink_led_n_times(
 }
 
 const DEBOUNCE_TIME_MS: u64 = 20;
-async fn button_events_topic_worker(
-    button: &Mutex<Input<'static>>,
-    sender: Sender<BleWireTx<'static, 'static, 'static>>,
-) {
+async fn button_events_topic_worker(button: &Mutex<Input<'static>>, sender: Sender<BleWireTxImpl>) {
     let mut seq = 0u8;
     loop {
         let pressed_for = {
@@ -234,7 +232,7 @@ async fn start_button_events_topic(
     context: DispatchSpawnContext,
     header: VarHeader,
     _rqst: NoArg,
-    sender: Sender<BleWireTx<'static, 'static, 'static>>,
+    sender: Sender<BleWireTxImpl>,
 ) {
     defmt::debug!("Handling start_button_events_topic");
     let Some((_key, topic_stop_signal)) = context
@@ -287,6 +285,7 @@ async fn stop_button_events_topic(
     topic_stop_signal.signal(());
     protocol::endpoints::EmptyRes {}
 }
+
 async fn echo(
     _context: &mut DispatchContext,
     _header: VarHeader,
@@ -321,14 +320,14 @@ pub(crate) struct DispatchContext {
     task_table: TopicTaskTable,
     pub(crate) button: &'static Mutex<Input<'static>>,
     pub(crate) led: Output<'static>,
-    tx: BleWireTx<'static, 'static, 'static>,
+    tx: BleWireTxImpl,
 }
 
 impl DispatchContext {
     pub fn new(
         button: &'static Mutex<Input<'static>>,
         led: Output<'static>,
-        tx: BleWireTx<'static, 'static, 'static>,
+        tx: BleWireTxImpl,
     ) -> Self {
         Self {
             task_table: &TOPIC_TASK_STATE,
@@ -356,16 +355,92 @@ impl SpawnContext for DispatchContext {
 
 // importing these handlers to the namespace because the `define_dispatch` macro does not match
 // fully qualified paths for handler functions, it expects identifiers
-use crate::rpc::ota::{
-    approve_firmware as ota_approve_firmware, factory_reset as ota_factory_reset,
-    finalize as ota_finalize, prepare as ota_prepare, transfer_bytes as ota_transfer_bytes,
+use crate::{
+    ble::BleWireTxImpl,
+    rpc::ota::{
+        approve_firmware as ota_approve_firmware, factory_reset as ota_factory_reset,
+        finalize as ota_finalize, prepare as ota_prepare, transfer_bytes as ota_transfer_bytes,
+    },
 };
 use postcard_rpc::server::impls::embedded_io_async_v0_6::dispatch_impl::{WireSpawnImpl, spawn_fn};
+
+#[embassy_executor::task]
+async fn start_bandwidth_test_topic(
+    context: DispatchSpawnContext,
+    header: VarHeader,
+    _rqst: NoArg,
+    sender: Sender<BleWireTxImpl>,
+) {
+    defmt::debug!("Handling start_bandwidth_test_topic");
+    let Some((_key, topic_stop_signal)) = context
+        .task_table
+        .iter()
+        .find(|(key, _)| **key == protocol::topics::BandwidthTestTopic::TOPIC_KEY)
+    else {
+        panic!("We should have one task_table entry for every topic");
+    };
+
+    let _ = topic_stop_signal.try_take();
+    if sender
+        .reply::<StartTestTopicBandwidth>(header.seq_no, &(().into()))
+        .await
+        .is_err()
+    {
+        defmt::error!("Failed to reply to start_bandwidth_test_topic rpc message");
+        return;
+    }
+
+    let mut seq = 0u8;
+    loop {
+        let data = BandwidthTestTopicData::new(Instant::now().as_ticks() as u8);
+        let send_fut = sender.publish::<BandwidthTestTopic>(seq.into(), &data);
+        seq = seq.wrapping_add(1);
+
+        match select(send_fut, topic_stop_signal.wait()).await {
+            Either::First(res) => {
+                if res.is_err() {
+                    break;
+                }
+            }
+            Either::Second(_) => {
+                defmt::debug!("Stop signal for bandwidth test topic");
+                break;
+            }
+        };
+    }
+}
+
+async fn stop_bandwidth_test_topic(
+    context: &mut DispatchContext,
+    _header: VarHeader,
+    _rqst: NoArg,
+) -> protocol::endpoints::EmptyRes {
+    defmt::error!("Handling stop_bandwidth_test_topic");
+
+    let Some((_key, topic_stop_signal)) = context
+        .task_table
+        .iter()
+        .find(|(key, _)| **key == protocol::topics::BandwidthTestTopic::TOPIC_KEY)
+    else {
+        panic!("We should have one task_table entry for every topic");
+    };
+    topic_stop_signal.signal(());
+    protocol::endpoints::EmptyRes {}
+}
+
+async fn do_nothing(
+    _context: &mut DispatchContext,
+    _header: VarHeader,
+    _rqst: BandwidthTestData,
+) -> protocol::endpoints::EmptyRes {
+    defmt::debug!("Handling do_nothing");
+    protocol::endpoints::EmptyRes {}
+}
 
 define_dispatch! {
     app: BleDispatcher;
     spawn_fn: spawn_fn;
-    tx_impl: BleWireTx<'static, 'static, 'static>;
+    tx_impl: BleWireTxImpl;
     spawn_impl: WireSpawnImpl;
     context: DispatchContext;
 
@@ -387,12 +462,15 @@ define_dispatch! {
         | ApproveFirmware     | async | ota_approve_firmware |
         | FactoryReset        | async | ota_factory_reset    |
         // Application Endpoints
-        | GetApplSettings        | async             | get_appl_settings  |
-        | SetApplSettings        | async             | set_appl_settings  |
-        | BlinkLedEndpoint       | async             | blink_led_n_times  |
-        | StartButtonEventsTopic | spawn             | start_button_events_topic |
-        | StopButtonEventsTopic  | async             | stop_button_events_topic  |
-        | EchoEndpoint           | async             | echo                      |
+        | GetApplSettings         | async             | get_appl_settings  |
+        | SetApplSettings         | async             | set_appl_settings  |
+        | BlinkLedEndpoint        | async             | blink_led_n_times  |
+        | StartButtonEventsTopic  | spawn             | start_button_events_topic |
+        | StopButtonEventsTopic   | async             | stop_button_events_topic  |
+        | EchoEndpoint            | async             | echo                      |
+        | StartTestTopicBandwidth | spawn             | start_bandwidth_test_topic           |
+        | StopTestTopicBandwidth  | async             | stop_bandwidth_test_topic            |
+        | TestBandwidth           | async             | do_nothing                           |
     };
     topics_in: {
         list: protocol::topics::EMPTY_TOPICS;

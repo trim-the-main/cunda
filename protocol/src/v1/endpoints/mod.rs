@@ -31,6 +31,9 @@ endpoints! {
     | StartButtonEventsTopic  | NoArg             | EmptyRes           | "start_button_events_topic" |
     | StopButtonEventsTopic   | NoArg             | EmptyRes           | "stop_button_events_topic"  |
     | EchoEndpoint            | EchoRequest       | EchoResponse       | "echo"                      |
+    | StartTestTopicBandwidth | NoArg             | EmptyRes           | "start_test_topic_bandwidth"|
+    | StopTestTopicBandwidth  | NoArg             | EmptyRes           | "stop_test_topic_bandwidth" |
+    | TestBandwidth           | BandwidthTestData           | EmptyRes           | "test_bandwidth"            |
 }
 
 #[derive(Serialize, Deserialize, Schema, Debug, Clone, Default)]
@@ -134,6 +137,11 @@ pub enum OtaResult {
 pub struct OtaBytes {
     pub offset: u32,
     pub data: ProtocolVecType!(u8, 4096),
+}
+
+#[derive(Serialize, Deserialize, Schema, Debug, Clone, Default)]
+pub struct BandwidthTestData {
+    pub data: ProtocolVecType!(u8, 2048),
 }
 
 #[cfg(test)]

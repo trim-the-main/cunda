@@ -83,7 +83,7 @@ pub type TxDataCallback = dyn Fn(std::vec::Vec<u8>) + Send + Sync;
 
 pub struct Client {
     tx_sink: Option<Box<TxDataCallback>>,
-    rx_accumulator: Mutex<Accumulator<1024>>,
+    rx_accumulator: Mutex<Accumulator<2048>>,
 
     rx_endpoint_response_futures: WaitMap<header::VarHeader, (header::VarHeader, Vec<u8>)>,
     topics: RwLock<Vec<(Key, Box<dyn TopicSink>)>>,

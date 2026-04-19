@@ -1,4 +1,5 @@
 use frb_prpc_juggle::client_interface::TopicSink;
+use protocol::topics::{BandwidthTestTopic, BandwidthTestTopicData};
 use serde::de::DeserializeOwned;
 
 use crate::frb_generated::StreamSink;
@@ -94,4 +95,5 @@ frb_prpc_juggle::topic_dispatcher_trait! {
     | -------       | ---------
     | SysStatsTopic | SysStats
     | ButtonEvents  | ButtonEvent
+    | BandwidthTestTopic | BandwidthTestTopicData
 }

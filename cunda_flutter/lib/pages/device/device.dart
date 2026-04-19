@@ -1,6 +1,7 @@
 import 'package:cunda_flutter/pages/device/tab_0_application_page.dart';
 import 'package:cunda_flutter/pages/device/tab_1_system_page.dart';
 import 'package:cunda_flutter/pages/device/tab_2_settings_page.dart';
+import 'package:cunda_flutter/pages/device/tab_3_bandwidth_page.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
 import 'package:flutter/material.dart';
@@ -18,7 +19,7 @@ class DevicePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: _connectionPageTitle(),
@@ -28,6 +29,7 @@ class DevicePage extends StatelessWidget {
               Tab(text: "Application"),
               Tab(text: "System"),
               Tab(text: "Settings"),
+              Tab(text: "Bandwidth"),
             ],
           ),
         ),
@@ -36,6 +38,7 @@ class DevicePage extends StatelessWidget {
             ApplicationTabPage(device: device),
             SystemTabPage(device: device),
             SettingsTabPage(device: device),
+            BandwidthTabPage(device: device),
           ],
         ),
       ),
