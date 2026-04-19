@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:async/async.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc/client.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1/endpoints.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
@@ -14,13 +15,18 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'client.g.dart';
 
 final log = Logger('RpcClientProvider');
+const gattOverhead = 7;
 
 enum RpcUuid {
   service(uuidStr: '408813DF-5DD4-1F87-EC11-CDB001100000'),
-  toServer(
+  toServerNotAcked(
     uuidStr: '408813df-5dd4-1f87-ec11-cdb001100001',
   ), // to microcontroller
-  toClient(uuidStr: '408813df-5dd4-1f87-ec11-cdb001100002'); // to us
+  toServerAcked(
+    uuidStr: '408813df-5dd4-1f87-ec11-cdb001100002',
+  ), // to microcontroller
+  toClientNotAcked(uuidStr: '408813df-5dd4-1f87-ec11-cdb001100003'), // to us
+  toClientAcked(uuidStr: '408813df-5dd4-1f87-ec11-cdb001100004'); // to us
 
   final String uuidStr;
 
@@ -50,26 +56,48 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
     throw NotRpcDeviceException(notFound: RpcUuid.service);
   }
 
-  BluetoothCharacteristic toServer;
   log.fine("List of characteristics: $rpcServiceCharacteristics");
+  BluetoothCharacteristic toServerNotAcked;
   try {
-    toServer = rpcServiceCharacteristics
-        .where((c) => c.characteristicUuid == RpcUuid.toServer.guidValue)
+    toServerNotAcked = rpcServiceCharacteristics
+        .where(
+          (c) => c.characteristicUuid == RpcUuid.toServerNotAcked.guidValue,
+        )
         .single;
   } on StateError {
-    log.warning("No characteristic with UUID rpcToServerCharUuid");
-    throw NotRpcDeviceException(notFound: RpcUuid.toServer);
+    log.warning("No characteristic with UUID rpcToServerNotAckedCharUuid");
+    throw NotRpcDeviceException(notFound: RpcUuid.toServerNotAcked);
   }
-  BluetoothCharacteristic toClient;
+  BluetoothCharacteristic toServerAcked;
   try {
-    toClient = rpcServiceCharacteristics
-        .where((c) => c.characteristicUuid == RpcUuid.toClient.guidValue)
+    toServerAcked = rpcServiceCharacteristics
+        .where((c) => c.characteristicUuid == RpcUuid.toServerAcked.guidValue)
         .single;
   } on StateError {
-    log.warning("No characteristic with UUID rpcToServerCharUuid");
-    throw NotRpcDeviceException(notFound: RpcUuid.toClient);
+    log.warning("No characteristic with UUID rpcToServerAckedCharUuid");
+    throw NotRpcDeviceException(notFound: RpcUuid.toServerAcked);
+  }
+  BluetoothCharacteristic toClientNotAcked;
+  try {
+    toClientNotAcked = rpcServiceCharacteristics
+        .where(
+          (c) => c.characteristicUuid == RpcUuid.toClientNotAcked.guidValue,
+        )
+        .single;
+  } on StateError {
+    log.warning("No characteristic with UUID rpcToClientNotAckedCharUuid");
+    throw NotRpcDeviceException(notFound: RpcUuid.toClientNotAcked);
   }
 
+  BluetoothCharacteristic toClientAcked;
+  try {
+    toClientAcked = rpcServiceCharacteristics
+        .where((c) => c.characteristicUuid == RpcUuid.toClientAcked.guidValue)
+        .single;
+  } on StateError {
+    log.warning("No characteristic with UUID rpcToClientAckedCharUuid");
+    throw NotRpcDeviceException(notFound: RpcUuid.toClientAcked);
+  }
   log.fine("Creating Rpc client");
   final client = FlutterClient();
 
@@ -77,10 +105,14 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
   // It is important we wait for completion of the rxCallback,
   // otherwise the data may reach out of order. There shouldn't be
   // a second Future in flight before the first one completes.
-  final rxStreamSub = toClient.onValueReceived.listen((data) async {
-    log.fine("rx from device: ${data.length} bytes");
-    await client.rxCallback(data: data);
-  });
+  final rxStreamSub =
+      StreamGroup.merge([
+        toClientNotAcked.onValueReceived,
+        toClientAcked.onValueReceived,
+      ]).listen((data) async {
+        log.fine("rx from device: ${data.length} bytes");
+        await client.rxCallback(data: data);
+      });
   device.cancelWhenDisconnected(rxStreamSub);
 
   // Data coming from the rust ffi uses the stream api
@@ -95,11 +127,14 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
     log.finest("tx to device: ${data.length} bytes");
     log.finest("$data");
     final chunkSize = Platform.isLinux
-        ? 251 - 3
-        : device.mtuNow - 3; // 3 bytes are used for ATT protocol overhead
+        ? 251 - gattOverhead
+        : device.mtuNow -
+              gattOverhead; // 3 bytes are used for ATT protocol overhead
     if (data.length <= chunkSize) {
       log.finest("data is smaller than mtu, sending in one go");
-      await toServer.write(data);
+      final writeTimer = Stopwatch()..start();
+      await toServerAcked.write(data);
+      log.fine("Write took ${writeTimer.elapsedMicroseconds} microseconds");
     } else {
       log.finest(
         "data is larger than mtu, splitting into chunks of size $chunkSize",
@@ -110,15 +145,32 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
           "sending chunk of size ${chunk.length}/${data.length} from offset $i",
         );
         log.finest("$chunk");
-        await toServer.write(chunk);
+        if (i >= data.length - chunkSize) {
+          final last = chunk.length < 2 ? null : chunk[chunk.length - 2];
+          log.info(
+            "        --->> sending last chunk, last byte before terminating zero: $last",
+          );
+          await toServerAcked.write(chunk);
+          log.info(" <<---        successfully sent the last chunk");
+        } else {
+          log.info(
+            "--->> sending unacked, last byte before terminating zero ${chunk.length}",
+          );
+          await toServerNotAcked.write(chunk, withoutResponse: true);
+          log.info("<<--- unacked sent ");
+        }
       }
     }
   });
   device.cancelWhenDisconnected(txStreamSub);
 
-  if (!toClient.isNotifying) {
+  if (!toClientAcked.isNotifying) {
     log.fine("notifications are not on so we are turning them on");
-    await toClient.setNotifyValue(true);
+    await toClientAcked.setNotifyValue(true);
+  }
+  if (!toClientNotAcked.isNotifying) {
+    log.fine("notifications are not on so we are turning them on");
+    await toClientNotAcked.setNotifyValue(true);
   }
   return client;
 }

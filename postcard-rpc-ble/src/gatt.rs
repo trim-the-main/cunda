@@ -2,17 +2,25 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use trouble_host::prelude::*;
 
 pub const BLE_MTU: usize = 255;
-pub const GATT_OVERHEAD: usize = 3;
+pub const GATT_OVERHEAD: usize = 7;
 
 #[gatt_service(uuid = "408813DF-5DD4-1F87-EC11-CDB001100000")]
 pub(crate) struct RpcService {
-    #[descriptor(uuid = descriptors::MEASUREMENT_DESCRIPTION, name = "rx", read, value = "rx buffer")]
-    #[characteristic(uuid = "408813df-5dd4-1f87-ec11-cdb001100001", write)]
-    pub rx: BytesCh,
+    #[descriptor(uuid = descriptors::MEASUREMENT_DESCRIPTION, name = "rx_not_acked", read, value = "rx buffer with no ack")]
+    #[characteristic(uuid = "408813df-5dd4-1f87-ec11-cdb001100001", write_without_response)]
+    pub rx_not_acked: BytesCh,
 
-    #[descriptor(uuid = descriptors::MEASUREMENT_DESCRIPTION, name = "tx", read, value = "tx buffer")]
-    #[characteristic(uuid = "408813df-5dd4-1f87-ec11-cdb001100002", indicate)]
-    pub tx: BytesCh,
+    #[descriptor(uuid = descriptors::MEASUREMENT_DESCRIPTION, name = "rx_acked", read, value = "rx buffer with acks")]
+    #[characteristic(uuid = "408813df-5dd4-1f87-ec11-cdb001100002", write)]
+    pub rx_acked: BytesCh,
+
+    #[descriptor(uuid = descriptors::MEASUREMENT_DESCRIPTION, name = "tx_not_acked", read, value = "tx buffer with no ack")]
+    #[characteristic(uuid = "408813df-5dd4-1f87-ec11-cdb001100003", notify)]
+    pub tx_not_acked: BytesCh,
+
+    #[descriptor(uuid = descriptors::MEASUREMENT_DESCRIPTION, name = "tx_acked", read, value = "tx buffer with acks")]
+    #[characteristic(uuid = "408813df-5dd4-1f87-ec11-cdb001100004", indicate)]
+    pub tx_acked: BytesCh,
 }
 
 #[gatt_server(mutex_type = CriticalSectionRawMutex)]

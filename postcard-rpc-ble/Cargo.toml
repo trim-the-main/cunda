@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+bt-hci = "0.6.0"
 cobs_accumulator = { path = "../cobs_accumulator" }
 critical-section = "1.2.0"
 defmt = "1.0.1"
@@ -15,3 +16,7 @@ postcard-rpc = { version = "0.12.1", features = ["cobs", "defmt", "embedded-io-a
 serde = { version = "1.0.228", default-features = false, features = ["derive"] }
 static_cell = "2.1.1"
 trouble-host = { version = "0.5.1", features = ["default-packet-pool-mtu-255", "defmt", "gatt", "peripheral"] }
+
+[dev-dependencies]
+critical-section = { version = "1.2.0", features = ["std"] }
+tokio = { version = "1", features = ["rt", "macros", "sync", "time"] }

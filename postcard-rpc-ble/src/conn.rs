@@ -23,7 +23,9 @@ impl<'storage, 'stack, 'server, const CH_SIZE: usize>
 where
     'storage: 'server,
 {
-    pub(crate) fn new(storage: &'storage PrpcBleStorage<'stack, 'server, CH_SIZE>) -> Self {
+    pub(crate) fn new<const TX_BUFFER_SIZE: usize>(
+        storage: &'storage PrpcBleStorage<'stack, 'server, CH_SIZE, TX_BUFFER_SIZE>,
+    ) -> Self {
         Self {
             server: &storage.server,
             ack_queue: &storage.ack_queue,
@@ -72,7 +74,8 @@ where
         &mut self,
         gatt_conn: &GattConnection<'stack, 'server, DefaultPacketPool>,
     ) -> Result<(), WireRxErrorKind> {
-        let rx_handle = self.server.rpc_service.rx.handle;
+        let rx_not_acked_handle = self.server.rpc_service.rx_not_acked.handle;
+        let rx_acked_handle = self.server.rpc_service.rx_acked.handle;
         let ack_q = self.ack_queue;
         let dispatcher_channel = self.dispatcher_channel;
         loop {
@@ -133,21 +136,42 @@ where
                         );
                     }
                     GattEvent::Write(write_event) => {
-                        if write_event.handle() == rx_handle {
-                            defmt::debug!("Received data: {:?}", write_event.data());
+                        if write_event.handle() == rx_not_acked_handle {
+                            defmt::debug!(
+                                "Received data unacked: {:?} bytes",
+                                write_event.data().len()
+                            );
+                            dispatcher_channel.send(write_event).await;
+                            return Ok(());
+                        }
+                        if write_event.handle() == rx_acked_handle {
+                            defmt::debug!(
+                                "Received data acked: {:?} bytes, last byte: {}",
+                                write_event.data().len(),
+                                write_event.data()[write_event.data().len() - 2]
+                            );
                             dispatcher_channel.send(write_event).await;
                             return Ok(());
                         } else {
                             defmt::warn!(
-                                "Unexpected GattEvent::Write received at {} instead of {}",
+                                "Unexpected GattEvent::Write received at {} instead of {} or {}",
                                 write_event.handle(),
-                                rx_handle,
+                                rx_not_acked_handle,
+                                rx_acked_handle,
                             );
                         }
                     }
                     GattEvent::Other(other_event) => match other_event.payload().incoming() {
-                        trouble_host::att::AttClient::Confirmation(_) => ack_q.process_ack(),
-                        _ => {}
+                        trouble_host::att::AttClient::Confirmation(_) => {
+                            defmt::debug!("Received ack");
+                            ack_q.process_ack()
+                        }
+                        trouble_host::att::AttClient::Request(att_req) => {
+                            defmt::warn!("Got unexpected GattEvent::Other {}", att_req);
+                        }
+                        trouble_host::att::AttClient::Command(att_cmd) => {
+                            defmt::warn!("Got unexpected GattEvent::Other {}", att_cmd);
+                        }
                     },
                 },
             }

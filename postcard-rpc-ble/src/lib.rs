@@ -19,15 +19,17 @@ pub use conn::PrpcBleConn;
 pub use dispatcher::DispatcherRunner;
 pub use tx::BleWireTx;
 
-pub struct PrpcBleStorage<'stack, 'server, const CH_SIZE: usize> {
+pub struct PrpcBleStorage<'stack, 'server, const CH_SIZE: usize, const TX_BUFFER_SIZE: usize> {
     server: GattServerRpc<'server>,
     ack_queue: AckQueue,
     gatt_conn: RwLock<Option<GattConnection<'stack, 'server, DefaultPacketPool>>>,
-    tx_batch: TxBatchState,
+    tx_batch: TxBatchState<TX_BUFFER_SIZE>,
     rx_channel: Channel<NoopRawMutex, WriteEvent<'stack, 'server, DefaultPacketPool>, CH_SIZE>,
 }
 
-impl<'stack, 'server, const CH_SIZE: usize> PrpcBleStorage<'stack, 'server, CH_SIZE> {
+impl<'stack, 'server, const CH_SIZE: usize, const TX_BUFFER_SIZE: usize>
+    PrpcBleStorage<'stack, 'server, CH_SIZE, TX_BUFFER_SIZE>
+{
     pub fn new(cfg: PeripheralConfig<'server>) -> Self {
         Self {
             server: GattServerRpc::new_with_config(GapConfig::Peripheral(cfg))
@@ -49,7 +51,7 @@ impl<'stack, 'server, const CH_SIZE: usize> PrpcBleStorage<'stack, 'server, CH_S
     ) -> (
         PrpcBleConn<'storage, 'stack, 'server, CH_SIZE>,
         DispatcherRunner<'storage, 'stack, 'server, CH_SIZE>,
-        BleWireTx<'storage, 'stack, 'server>,
+        BleWireTx<'storage, 'stack, 'server, TX_BUFFER_SIZE>,
     )
     where
         'storage: 'server,

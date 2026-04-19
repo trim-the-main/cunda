@@ -37,11 +37,30 @@ impl<'storage, 'stack, 'server, const CH_SIZE: usize>
 
         loop {
             defmt::debug!("Dispatcher waiting for write event");
+
             let w_event = self.rx.receive().await;
             if acc.feed(w_event.data()).is_err() {
                 acc.reset();
             }
-            drop(w_event);
+
+            match w_event.payload().incoming() {
+                trouble_host::att::AttClient::Request(_att_req) => {
+                    defmt::debug!("Write request received {}", last(w_event.data()));
+                    match w_event.accept() {
+                        Ok(reply) => {
+                            reply.send().await;
+                        }
+                        Err(err) => {
+                            defmt::warn!(
+                                "Error sending acknowledgement on the received package {}",
+                                err
+                            );
+                        }
+                    }
+                }
+                trouble_host::att::AttClient::Command(_) => {}
+                trouble_host::att::AttClient::Confirmation(_) => {}
+            }
 
             loop {
                 match acc.yield_frame() {
@@ -53,8 +72,10 @@ impl<'storage, 'stack, 'server, const CH_SIZE: usize>
                             continue;
                         };
                         let fut = d.handle(&tx, &hdr, body);
+                        defmt::debug!("Dispatcher task waiting on the handler");
                         if let Err(e) = fut.await {
                             let kind = e.as_kind();
+                            defmt::error!("Endpoint request resulted in error: {}", kind);
                             match kind {
                                 WireTxErrorKind::ConnectionClosed => break,
                                 WireTxErrorKind::Other => continue,
@@ -62,11 +83,19 @@ impl<'storage, 'stack, 'server, const CH_SIZE: usize>
                                 _ => continue,
                             }
                         }
+                        defmt::debug!("Dispatcher task returned ok");
                     }
                     Err(DecodeError::DecodingError) => continue,
                     Err(DecodeError::Incomplete) | Err(DecodeError::NoData) => break,
                 }
             }
         }
+    }
+}
+fn last<T: Copy>(s: &[T]) -> Option<T> {
+    if s.len() < 2 {
+        None
+    } else {
+        Some(s[s.len() - 2])
     }
 }

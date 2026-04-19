@@ -1,3 +1,5 @@
+use bt_hci::cmd::le::{LeConnUpdate, LeReadLocalSupportedFeatures, LeSetDataLength};
+use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_executor::{Spawner, SpawnerTraceExt};
 use embassy_time::Duration;
 use esp_hal::gpio::{Input, Output};
@@ -15,13 +17,16 @@ use crate::rpc::dispatcher::{BleDispatcher, DispatchContext};
 pub(crate) mod constants {
     pub(crate) const CONNECTIONS_MAX: usize = 1;
     pub(crate) const L2CAP_CHANNELS_MAX: usize = 2;
-    pub(crate) const N_CMD_SLOTS: usize = 8;
+    pub(crate) const N_CMD_SLOTS: usize = 4;
 }
 
 use crate::ble::constants::*;
 
 pub(crate) type PeriphRole =
     Peripheral<'static, ExternalController<BleConnector<'static>, N_CMD_SLOTS>, DefaultPacketPool>;
+
+pub const TX_SIZE: usize = 2048;
+pub type BleWireTxImpl = BleWireTx<'static, 'static, 'static, TX_SIZE>;
 
 pub async fn ble_init(
     spawner: Spawner,
@@ -59,7 +64,7 @@ pub async fn ble_init(
         .expect("Failed to spawn BleBackendTask");
 
     // Initialize the RPC transport
-    static PRPC: StaticCell<PrpcBleStorage<1>> = StaticCell::new();
+    static PRPC: StaticCell<PrpcBleStorage<1, TX_SIZE>> = StaticCell::new();
     let prpc = PRPC.init(PrpcBleStorage::new(PeripheralConfig {
         name: "PostcardRPC",
         appearance: &appearance::power_device::GENERIC_POWER_DEVICE,
@@ -69,11 +74,10 @@ pub async fn ble_init(
     spawner
         .spawn_named(
             "BleFrontendTask",
-            ble_frontend_task(conn, peripheral, spawner, button, led, tx, d_runner),
+            ble_frontend_task(conn, peripheral, spawner, button, led, tx, d_runner, stack),
         )
         .expect("Failed to spawn BleFrontendTask");
 }
-
 /// Background task for communicating with lower level, today we panic if it fails but maybe
 /// we can do a more graceful restart later. I dont think there's any recoverable error here.
 #[embassy_executor::task]
@@ -90,6 +94,31 @@ pub async fn ble_backend_task(
     }
 }
 
+async fn update_connection_params<'stack, C: Controller, P: PacketPool>(
+    stack: &Stack<'_, C, P>,
+    connection: &Connection<'stack, P>,
+) -> Result<(), BleHostError<C::Error>>
+where
+    C: ControllerCmdAsync<LeConnUpdate>
+        + ControllerCmdSync<LeReadLocalSupportedFeatures>
+        + ControllerCmdSync<LeSetDataLength>,
+{
+    connection.update_data_length(stack, 251, 2120).await?;
+    connection
+        .update_connection_params(
+            &stack,
+            &ConnectParams {
+                min_connection_interval: Duration::from_micros(7500),
+                max_connection_interval: Duration::from_micros(7500),
+                max_latency: 0,
+                supervision_timeout: Duration::from_secs(5),
+                min_event_length: Duration::from_secs(0),
+                max_event_length: Duration::from_secs(0),
+            },
+        )
+        .await
+}
+
 #[embassy_executor::task]
 pub async fn ble_frontend_task(
     mut conn: PrpcBleConn<'static, 'static, 'static, 1>,
@@ -97,8 +126,13 @@ pub async fn ble_frontend_task(
     spawner: Spawner,
     button: &'static Mutex<Input<'static>>,
     led: Output<'static>,
-    tx: BleWireTx<'static, 'static, 'static>,
+    tx: BleWireTxImpl,
     d_runner: DispatcherRunner<'static, 'static, 'static, 1>,
+    stack: &'static Stack<
+        'static,
+        ExternalController<BleConnector<'static>, N_CMD_SLOTS>,
+        DefaultPacketPool,
+    >,
 ) {
     // Create and spawn the dispatcher task
     let context = DispatchContext::new(button, led, tx.clone());
@@ -116,6 +150,11 @@ pub async fn ble_frontend_task(
         let sys_config = crate::storage::SYSTEM_CONFIG.get_or_default().await;
         match advertise_once(&mut periph, &sys_config.ble_adv_name).await {
             Ok(connection) => {
+                let _ = update_connection_params(stack, &connection)
+                    .await
+                    .map_err(|err| {
+                        defmt::error!("Error updating the connection parameters{}", err)
+                    });
                 if conn.on_connected(connection).await.is_ok() {
                     let _ = conn.run().await;
                 }
@@ -178,7 +217,7 @@ const RX_BUF_SIZE: usize = 4096 + 256;
 async fn rpc_dispatcher_task(
     runner: DispatcherRunner<'static, 'static, 'static, 1>,
     mut dispatcher: BleDispatcher,
-    tx: Sender<BleWireTx<'static, 'static, 'static>>,
+    tx: Sender<BleWireTxImpl>,
 ) {
     runner.run::<_, RX_BUF_SIZE>(&mut dispatcher, tx).await;
 }
