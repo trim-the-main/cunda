@@ -1,18 +1,19 @@
+use core::cell::RefCell;
+
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Sender;
 use postcard_rpc::server::WireRxErrorKind;
 use trouble_host::{gatt::GattConnection, prelude::*};
 
 use crate::PrpcBleStorage;
-use crate::ack::AckQueue;
 use crate::gatt::GattServerRpc;
-use maitake_sync::RwLock;
+use maitake_sync::{RwLock, WaitCell};
 
 /// Connection handler. Manages GATT events and connection lifecycle.
 /// Handed to the frontend task.
 pub struct PrpcBleConn<'storage, 'stack, 'server, const CH_SIZE: usize> {
     server: &'storage GattServerRpc<'server>,
-    ack_queue: &'storage AckQueue,
+    ack_queue: &'storage RefCell<WaitCell>,
     gatt_conn: &'storage RwLock<Option<GattConnection<'stack, 'server, DefaultPacketPool>>>,
     dispatcher_channel:
         Sender<'storage, NoopRawMutex, WriteEvent<'stack, 'server, DefaultPacketPool>, CH_SIZE>,
@@ -44,7 +45,7 @@ where
         match conn.with_attribute_server(&*self.server) {
             Ok(gatt_conn) => {
                 *guard = Some(gatt_conn);
-                self.ack_queue.process_connected();
+                *(self.ack_queue.borrow_mut()) = WaitCell::new();
                 Ok(())
             }
             Err(err) => Err(err),
@@ -76,13 +77,12 @@ where
     ) -> Result<(), WireRxErrorKind> {
         let rx_not_acked_handle = self.server.rpc_service.rx_not_acked.handle;
         let rx_acked_handle = self.server.rpc_service.rx_acked.handle;
-        let ack_q = self.ack_queue;
         let dispatcher_channel = self.dispatcher_channel;
         loop {
             match gatt_conn.next().await {
                 GattConnectionEvent::Disconnected { reason } => {
                     defmt::info!("Got disconnected event {}", reason);
-                    ack_q.process_disconnect();
+                    self.ack_queue.borrow().close();
                     return Err(WireRxErrorKind::ConnectionClosed);
                 }
                 GattConnectionEvent::PhyUpdated { tx_phy, rx_phy } => {
@@ -164,7 +164,9 @@ where
                     GattEvent::Other(other_event) => match other_event.payload().incoming() {
                         trouble_host::att::AttClient::Confirmation(_) => {
                             defmt::debug!("Received ack");
-                            ack_q.process_ack()
+                            if !self.ack_queue.borrow().wake() {
+                                defmt::warn!("Ack woke up nobody.")
+                            }
                         }
                         trouble_host::att::AttClient::Request(att_req) => {
                             defmt::warn!("Got unexpected GattEvent::Other {}", att_req);

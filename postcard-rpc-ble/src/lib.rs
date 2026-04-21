@@ -6,14 +6,15 @@ mod dispatcher;
 mod gatt;
 mod tx;
 
+use core::cell::RefCell;
+
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
-use maitake_sync::RwLock;
+use maitake_sync::{RwLock, WaitCell};
 use trouble_host::{gatt::GattConnection, prelude::*};
 
-use ack::AckQueue;
 use gatt::GattServerRpc;
-use tx::TxBatchState;
+use tx::TxBufferShared;
 
 pub use conn::PrpcBleConn;
 pub use dispatcher::DispatcherRunner;
@@ -21,9 +22,9 @@ pub use tx::BleWireTx;
 
 pub struct PrpcBleStorage<'stack, 'server, const CH_SIZE: usize, const TX_BUFFER_SIZE: usize> {
     server: GattServerRpc<'server>,
-    ack_queue: AckQueue,
+    ack_queue: RefCell<WaitCell>,
     gatt_conn: RwLock<Option<GattConnection<'stack, 'server, DefaultPacketPool>>>,
-    tx_batch: TxBatchState<TX_BUFFER_SIZE>,
+    tx_buffer: TxBufferShared<TX_BUFFER_SIZE>,
     rx_channel: Channel<NoopRawMutex, WriteEvent<'stack, 'server, DefaultPacketPool>, CH_SIZE>,
 }
 
@@ -34,9 +35,9 @@ impl<'stack, 'server, const CH_SIZE: usize, const TX_BUFFER_SIZE: usize>
         Self {
             server: GattServerRpc::new_with_config(GapConfig::Peripheral(cfg))
                 .expect("Failed to create GATT server"),
-            ack_queue: AckQueue::new(),
+            ack_queue: RefCell::new(WaitCell::new()),
             gatt_conn: RwLock::new(None),
-            tx_batch: TxBatchState::new(),
+            tx_buffer: TxBufferShared::new(),
             rx_channel: Channel::new(),
         }
     }
