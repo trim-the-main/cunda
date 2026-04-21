@@ -37,17 +37,19 @@ impl FlutterClient {
 }
 
 impl ClientEndpointInterface for FlutterClient {
-    fn call_rpc_endpoint<E: postcard_rpc::Endpoint>(
+    async fn call_rpc_endpoint<E: postcard_rpc::Endpoint>(
         &self,
         req: E::Request,
-    ) -> impl std::future::Future<
-        Output = Result<E::Response, ::frb_prpc_juggle::client_interface::FrbPostcardRpcError>,
-    > + Send
+    ) -> Result<E::Response, FrbPostcardRpcError>
     where
         E::Request: serde::Serialize + postcard_schema::Schema + Send,
         E::Response: serde::de::DeserializeOwned,
     {
-        self.inner.call_rpc_endpoint::<E>(req)
+        self.inner
+            .lock_for_endpoint_call()
+            .await
+            .call_rpc_endpoint::<E>(req)
+            .await
     }
 }
 

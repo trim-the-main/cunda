@@ -1,5 +1,6 @@
 use core::sync::atomic;
 
+use postcard_rpc::header::VarKeyKind;
 use postcard_rpc::standard_icd::WireError as RpcWireError;
 use postcard_rpc::{Endpoint, Key, Topic, header, host_client::RpcFrame};
 use tokio::sync::{Mutex, RwLock, oneshot};
@@ -103,46 +104,66 @@ impl PendingRpcResponseKey {
 }
 type RpcResponseResult = Result<Vec<u8>, Vec<u8>>;
 
-pub struct Client {
+pub struct EndpointCaller {
     tx_sink: Option<Box<TxDataCallback>>,
-    rx_accumulator: Mutex<Accumulator<2048>>,
+    seq_no: u32,
+}
 
-    pending_responses: Mutex<Vec<(PendingRpcResponseKey, oneshot::Sender<RpcResponseResult>)>>,
-    topics: RwLock<Vec<(Key, Box<dyn TopicSink>)>>,
-    seq_no: atomic::AtomicU32,
+pub struct EndpointHandle<'a> {
+    caller: tokio::sync::MutexGuard<'a, EndpointCaller>,
+    key_kind: &'a RwLock<header::VarKeyKind>,
+    pending_response:
+        &'a Mutex<Option<(PendingRpcResponseKey, oneshot::Sender<RpcResponseResult>)>>,
+}
+
+pub struct Client {
+    // Serialize RPC calls so only one is on the wire at a time.
+    // Don't overwhelm the firmware.
+    endpoint: tokio::sync::Mutex<EndpointCaller>,
     // Normally I expect this to be part of the protocol crate but for some reason it's defined in the server
     // so what we do is to wait for the first response of the microcontroller and find the value there, update
     // our copy and keep going from there.
     key_kind: RwLock<header::VarKeyKind>,
-    // Serialize RPC calls so only one is on the wire at a time.
-    // Don't overwhelm the firmware
-    rpc_in_flight: tokio::sync::Mutex<()>,
+    rx_accumulator: Mutex<Accumulator<2048>>,
+    pending_response: Mutex<Option<(PendingRpcResponseKey, oneshot::Sender<RpcResponseResult>)>>,
+    topics: RwLock<Vec<(Key, Box<dyn TopicSink>)>>,
 }
 
 impl Client {
     pub fn new() -> Self {
         Self {
-            tx_sink: None,
-            rx_accumulator: Mutex::new(Accumulator::new()),
-            pending_responses: Mutex::new(Vec::new()),
-            topics: RwLock::new(Vec::new()),
-            seq_no: atomic::AtomicU32::new(0),
+            endpoint: tokio::sync::Mutex::new(EndpointCaller {
+                tx_sink: None,
+                seq_no: 0u32,
+            }),
             key_kind: RwLock::new(header::VarKeyKind::Key8),
-            rpc_in_flight: tokio::sync::Mutex::new(()),
+            rx_accumulator: Mutex::new(Accumulator::new()),
+            pending_response: Mutex::new(None),
+            topics: RwLock::new(Vec::new()),
         }
     }
 
     pub fn init(&mut self, sink: Box<TxDataCallback>) {
-        self.tx_sink = Some(sink);
+        self.endpoint.get_mut().tx_sink = Some(sink);
     }
 
     pub fn deinit(&mut self) {
-        if let Some(sink) = self.tx_sink.take() {
+        if let Some(sink) = self.endpoint.get_mut().tx_sink.take() {
             drop(sink);
         }
 
         self.topics.get_mut().clear();
-        self.pending_responses.get_mut().clear();
+        *self.pending_response.get_mut() = None;
+    }
+
+    // This is how we serialize the endpoint calls. Client is locked to make an rpc call but can still
+    // receive topic messages.
+    pub async fn lock_for_endpoint_call(&self) -> EndpointHandle<'_> {
+        EndpointHandle {
+            caller: self.endpoint.lock().await,
+            key_kind: &self.key_kind,
+            pending_response: &self.pending_response,
+        }
     }
 }
 
@@ -176,23 +197,23 @@ impl Client {
             // if it's an endpoint response we need to find the appropriate endpoint
             // waiter and wake it up else we wake up the topic handler
 
-            // TODO: Evaluate if we should peek into header to see if it's an endpoint
-            // response key
-
             // Handle the frame by waking up whoever was waiting for this,
             // otherwise we toss it away
             {
-                let mut waiters = self.pending_responses.lock().await;
-                if let Some(idx) = waiters.iter().position(|(resp_key, _)| {
-                    resp_key.ok_header == hdr || resp_key.err_header == hdr
-                }) {
-                    let (key, tx) = waiters.swap_remove(idx);
-                    if key.ok_header == hdr {
-                        let _ = tx.send(Ok(body.to_vec()));
-                    } else {
-                        let _ = tx.send(Err(body.to_vec()));
+                let mut pending = self.pending_response.lock().await;
+                if let Some((resp_key, _)) = pending.as_ref() {
+                    if resp_key.ok_header == hdr || resp_key.err_header == hdr {
+                        let (key, tx) = pending.take().unwrap();
+                        if key.ok_header == hdr {
+                            if hdr.key.kind() != key.ok_header.key.kind() {
+                                *self.key_kind.write().await = hdr.key.kind();
+                            }
+                            let _ = tx.send(Ok(body.to_vec()));
+                        } else {
+                            let _ = tx.send(Err(body.to_vec()));
+                        }
+                        continue 'frame_loop;
                     }
-                    continue 'frame_loop;
                 }
             }
 
@@ -212,27 +233,9 @@ impl Client {
         }
         Ok(())
     }
-
-    // Send a frame using COBS encoding
-    pub async fn send(
-        &self,
-        frame: postcard_rpc::host_client::RpcFrame,
-    ) -> Result<(), FrbPostcardRpcError> {
-        log::trace!(
-            "Sending rpc frame using COBS encoding {:?}",
-            frame.to_bytes()
-        );
-        let mut frame = cobs::encode_vec(&frame.to_bytes());
-        frame.push(0); // COBS delimiter
-        log::trace!("Encoded version {:?}", frame);
-        if let Some(sink) = &self.tx_sink {
-            sink(frame);
-        }
-        Ok(())
-    }
 }
 
-impl ClientEndpointInterface for Client {
+impl ClientEndpointInterface for EndpointHandle<'_> {
     async fn call_rpc_endpoint<E: postcard_rpc::Endpoint>(
         &self,
         req: E::Request,
@@ -243,9 +246,7 @@ impl ClientEndpointInterface for Client {
     {
         log::debug!("Calling rpc endpoint {}", E::PATH);
         let start = std::time::Instant::now();
-        let seq = self
-            .seq_no
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let seq = self.caller.seq_no.wrapping_add(1);
         let mut frame = RpcFrame {
             header: header::VarHeader {
                 key: header::VarKey::Key8(E::REQ_KEY),
@@ -264,9 +265,6 @@ impl ClientEndpointInterface for Client {
         let key_kind = *self.key_kind.read().await;
         frame.header.key.shrink_to(key_kind);
 
-        // We are ready with the package to call send, however first we need to start waiting for the response,
-        // otherwise there's a window where the response arrives but nobody is waiting for it.
-
         // compose the response header that we will wait on:
         let key_kind = header::VarKeyKind::Key8;
         let mut resp_key = header::VarKey::Key8(E::RESP_KEY);
@@ -278,13 +276,21 @@ impl ClientEndpointInterface for Client {
 
         let (tx, rx) = oneshot::channel();
         {
-            let mut waiters = self.pending_responses.lock().await;
-            waiters.push((PendingRpcResponseKey::new(ok_resp_header), tx));
+            let mut pending = self.pending_response.lock().await;
+            *pending = Some((PendingRpcResponseKey::new(ok_resp_header), tx));
         }
 
-        // Until we get a response nobody else sends anything
-        let _guard = self.rpc_in_flight.lock().await;
-        self.send(frame).await?;
+        // Send using COBS encoding
+        log::trace!(
+            "Sending rpc frame using COBS encoding {:?}",
+            frame.to_bytes()
+        );
+        let mut encoded = cobs::encode_vec(&frame.to_bytes());
+        encoded.push(0); // COBS delimiter
+        log::trace!("Encoded version {:?}", encoded);
+        if let Some(sink) = &self.caller.tx_sink {
+            sink(encoded);
+        }
 
         // TODO: Handle timeout + connection closed
         let result = rx.await.map_err(|_| FrbPostcardRpcError::InternalError)?;
