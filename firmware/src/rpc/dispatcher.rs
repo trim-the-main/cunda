@@ -393,14 +393,18 @@ async fn start_bandwidth_test_topic(
     let mut seq = 0u8;
     loop {
         let data = BandwidthTestTopicData::new(Instant::now().as_ticks() as u8);
-        let send_fut = sender.publish::<BandwidthTestTopic>(seq.into(), &data);
+        if sender
+            .publish::<BandwidthTestTopic>(seq.into(), &data)
+            .await
+            .is_err()
+        {
+            break;
+        }
         seq = seq.wrapping_add(1);
 
-        match select(send_fut, topic_stop_signal.wait()).await {
-            Either::First(res) => {
-                if res.is_err() {
-                    break;
-                }
+        match select(Timer::after_ticks(0), topic_stop_signal.wait()).await {
+            Either::First(_) => {
+                continue;
             }
             Either::Second(_) => {
                 defmt::debug!("Stop signal for bandwidth test topic");
