@@ -1,8 +1,9 @@
 use core::sync::atomic;
 
-use maitake_sync::{Mutex, RwLock, WaitMap, wait_map::WakeOutcome};
 use postcard_rpc::standard_icd::WireError as RpcWireError;
 use postcard_rpc::{Endpoint, Key, Topic, header, host_client::RpcFrame};
+use tokio::sync::{Mutex, RwLock, oneshot};
+
 use postcard_schema::Schema;
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -81,11 +82,32 @@ pub trait TopicSink: Send + Sync {
 // dispatch of the responses topic messages etc.
 pub type TxDataCallback = dyn Fn(std::vec::Vec<u8>) + Send + Sync;
 
+struct PendingRpcResponseKey {
+    ok_header: header::VarHeader,
+    err_header: header::VarHeader,
+}
+
+impl PendingRpcResponseKey {
+    const RPC_ERROR_KEY: header::VarKey =
+        header::VarKey::Key8(postcard_rpc::standard_icd::ERROR_KEY);
+    const fn new(ok_header: header::VarHeader) -> Self {
+        let err_header = header::VarHeader {
+            key: Self::RPC_ERROR_KEY,
+            seq_no: ok_header.seq_no,
+        };
+        Self {
+            ok_header,
+            err_header,
+        }
+    }
+}
+type RpcResponseResult = Result<Vec<u8>, Vec<u8>>;
+
 pub struct Client {
     tx_sink: Option<Box<TxDataCallback>>,
     rx_accumulator: Mutex<Accumulator<2048>>,
 
-    rx_endpoint_response_futures: WaitMap<header::VarHeader, (header::VarHeader, Vec<u8>)>,
+    pending_responses: Mutex<Vec<(PendingRpcResponseKey, oneshot::Sender<RpcResponseResult>)>>,
     topics: RwLock<Vec<(Key, Box<dyn TopicSink>)>>,
     seq_no: atomic::AtomicU32,
     // Normally I expect this to be part of the protocol crate but for some reason it's defined in the server
@@ -102,7 +124,7 @@ impl Client {
         Self {
             tx_sink: None,
             rx_accumulator: Mutex::new(Accumulator::new()),
-            rx_endpoint_response_futures: WaitMap::new(),
+            pending_responses: Mutex::new(Vec::new()),
             topics: RwLock::new(Vec::new()),
             seq_no: atomic::AtomicU32::new(0),
             key_kind: RwLock::new(header::VarKeyKind::Key8),
@@ -120,7 +142,7 @@ impl Client {
         }
 
         self.topics.get_mut().clear();
-        self.rx_endpoint_response_futures.close();
+        self.pending_responses.get_mut().clear();
     }
 }
 
@@ -159,13 +181,19 @@ impl Client {
 
             // Handle the frame by waking up whoever was waiting for this,
             // otherwise we toss it away
-            match self
-                .rx_endpoint_response_futures
-                .wake(&hdr, (hdr, body.to_vec()))
             {
-                WakeOutcome::Woke => continue 'frame_loop,
-                WakeOutcome::NoMatch(_) => {} // The header does not match a response that we were waiting for, maybe a topic message
-                WakeOutcome::Closed(_) => return Err(FrbPostcardRpcError::InternalError), // should not happen
+                let mut waiters = self.pending_responses.lock().await;
+                if let Some(idx) = waiters.iter().position(|(resp_key, _)| {
+                    resp_key.ok_header == hdr || resp_key.err_header == hdr
+                }) {
+                    let (key, tx) = waiters.swap_remove(idx);
+                    if key.ok_header == hdr {
+                        let _ = tx.send(Ok(body.to_vec()));
+                    } else {
+                        let _ = tx.send(Err(body.to_vec()));
+                    }
+                    continue 'frame_loop;
+                }
             }
 
             let topics = self.topics.read().await;
@@ -247,46 +275,33 @@ impl ClientEndpointInterface for Client {
             key: resp_key,
             seq_no: frame.header.seq_no,
         };
-        let err_resp_header = header::VarHeader {
-            key: postcard_rpc::header::VarKey::Key8(postcard_rpc::standard_icd::ERROR_KEY),
-            seq_no: frame.header.seq_no,
-        };
 
-        let ok_response_future = self.rx_endpoint_response_futures.wait(ok_resp_header);
-        let rpc_error_future = self.rx_endpoint_response_futures.wait(err_resp_header);
-        let mut ok_response_future = Box::pin(ok_response_future);
-        let mut rpc_error_future = Box::pin(rpc_error_future);
-        ok_response_future.as_mut().subscribe().await.unwrap();
-        rpc_error_future.as_mut().subscribe().await.unwrap();
+        let (tx, rx) = oneshot::channel();
+        {
+            let mut waiters = self.pending_responses.lock().await;
+            waiters.push((PendingRpcResponseKey::new(ok_resp_header), tx));
+        }
 
         // Until we get a response nobody else sends anything
         let _guard = self.rpc_in_flight.lock().await;
         self.send(frame).await?;
 
-        // TODO; Handle timeout + connection closed
-        tokio::select! {
-            o = ok_response_future => {
-                let response_body = match o {
-                    Ok((_hdr, body)) => body,
-                    Err(wait_error) => {
-                        log::warn!(
-                            "Error waiting for response from microcontroller, {}",
-                        wait_error
-                    );
-                    return Err(FrbPostcardRpcError::InternalError);
-                }
-            };
-            let call_duration = std::time::Instant::now() - start;
-            log::debug!("{} took {:?}", E::PATH, call_duration);
-            return postcard::from_bytes(&response_body).map_err(|_err| FrbPostcardRpcError::DeserializationError);
-            },
-            e = rpc_error_future => {
-                let (_hdr, resp) = e.map_err(|_err| FrbPostcardRpcError::InternalError)?;
+        // TODO: Handle timeout + connection closed
+        let result = rx.await.map_err(|_| FrbPostcardRpcError::InternalError)?;
 
-                let err = postcard::from_bytes::<postcard_rpc::standard_icd::WireError>(&resp).map_err(|_err| FrbPostcardRpcError::DeserializationError)?;
-                return Err(FrbPostcardRpcError::RpcError(err));
-            },
-        };
+        let call_duration = std::time::Instant::now() - start;
+        log::debug!("{} took {:?}", E::PATH, call_duration);
+
+        match result {
+            Ok(body) => {
+                postcard::from_bytes(&body).map_err(|_| FrbPostcardRpcError::DeserializationError)
+            }
+            Err(body) => {
+                let err = postcard::from_bytes::<postcard_rpc::standard_icd::WireError>(&body)
+                    .map_err(|_| FrbPostcardRpcError::DeserializationError)?;
+                Err(FrbPostcardRpcError::RpcError(err))
+            }
+        }
     }
 }
 
