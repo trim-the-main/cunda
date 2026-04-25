@@ -79,6 +79,7 @@ pub(super) async fn approve_firmware(
     _rqst: NoArg,
 ) -> OtaResult {
     defmt::debug!("Handling ApproveFirmware");
+    let _timer = crate::LogTimeOfScope::new("Handling of ApproveFirmware");
 
     let mut ota = crate::storage::ota::OTA.lock().await;
     if let Some(ref mut ota) = *ota {

@@ -42,8 +42,13 @@ class NotRpcDeviceException implements Exception {
 }
 
 Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
+  final timer = Stopwatch()..start();
   log.fine("Setting up the Rpc client");
   final services = await device.discoverServices();
+  log.fine(
+    "Discovering services took ${timer.elapsedMilliseconds} milliseconds",
+  );
+  timer.reset();
   log.fine("discovered services");
   final List<BluetoothCharacteristic> rpcServiceCharacteristics;
   try {
@@ -131,10 +136,10 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
         : device.mtuNow -
               gattOverhead; // 3 bytes are used for ATT protocol overhead
     if (data.length <= chunkSize) {
-      log.finest("data is smaller than mtu, sending in one go");
+      log.finest("data is smaller than mtu, sending reliably in one go");
       final writeTimer = Stopwatch()..start();
       await toServerAcked.write(data);
-      log.fine("Write took ${writeTimer.elapsedMicroseconds} microseconds");
+      log.finest("Write took ${writeTimer.elapsedMicroseconds} microseconds");
     } else {
       log.finest(
         "data is larger than mtu, splitting into chunks of size $chunkSize",
@@ -147,31 +152,33 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
         log.finest("$chunk");
         if (i >= data.length - chunkSize) {
           final last = chunk.length < 2 ? null : chunk[chunk.length - 2];
-          log.info(
+          log.finest(
             "        --->> sending last chunk, last byte before terminating zero: $last",
           );
           await toServerAcked.write(chunk);
-          log.info(" <<---        successfully sent the last chunk");
+          log.finest(" <<---        successfully sent the last chunk");
         } else {
-          log.info(
+          log.finest(
             "--->> sending unacked, last byte before terminating zero ${chunk.length}",
           );
           await toServerNotAcked.write(chunk, withoutResponse: true);
-          log.info("<<--- unacked sent ");
+          log.finest("<<--- unacked sent ");
         }
       }
     }
   });
   device.cancelWhenDisconnected(txStreamSub);
 
+  timer.reset();
   if (!toClientAcked.isNotifying) {
-    log.fine("notifications are not on so we are turning them on");
     await toClientAcked.setNotifyValue(true);
   }
   if (!toClientNotAcked.isNotifying) {
-    log.fine("notifications are not on so we are turning them on");
     await toClientNotAcked.setNotifyValue(true);
   }
+  log.fine(
+    "setting notifications took ${timer.elapsedMilliseconds} milliseconds",
+  );
   return client;
 }
 
@@ -190,8 +197,15 @@ FutureOr<FlutterClient> rpcClient(Ref ref, BluetoothDevice device) async {
     throw ConnectionLost();
   }
 
+  final timer = Stopwatch()..start();
   final client = await _createRpcClientFor(device);
+  log.fine("Client creation took ${timer.elapsedMilliseconds} milliseconds");
+  timer.reset();
   await client.approveFirmware(req: NoArg());
+  log.fine(
+    "Approve firmware rpc took ${timer.elapsedMilliseconds} milliseconds",
+  );
+  timer.reset();
   ref.onDispose(() {
     log.fine("Disposing rpc client");
     client.dispose(); // calls drop on the rust side

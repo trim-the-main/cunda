@@ -63,11 +63,16 @@ pub async fn ble_init(
         .spawn_named("BleBackendTask", ble_backend_task(runner))
         .expect("Failed to spawn BleBackendTask");
 
+    let dev_name = {
+        let sys_config = crate::storage::SYSTEM_CONFIG.get_or_default().await;
+        static NAME: StaticCell<heapless::String<20>> = StaticCell::new();
+        NAME.init(sys_config.ble_adv_name)
+    };
     // Initialize the RPC transport
     static PRPC: StaticCell<PrpcBleStorage<1, TX_SIZE>> = StaticCell::new();
     let prpc = PRPC.init(PrpcBleStorage::new(PeripheralConfig {
-        name: "PostcardRPC",
-        appearance: &appearance::power_device::GENERIC_POWER_DEVICE,
+        name: dev_name,
+        appearance: &appearance::UNKNOWN,
     }));
     let (conn, d_runner, tx) = prpc.init();
 
@@ -94,7 +99,7 @@ pub async fn ble_backend_task(
     }
 }
 
-async fn update_connection_params<'stack, C: Controller, P: PacketPool>(
+pub async fn update_connection_params<'stack, C: Controller, P: PacketPool>(
     stack: &Stack<'_, C, P>,
     connection: &Connection<'stack, P>,
 ) -> Result<(), BleHostError<C::Error>>
@@ -150,11 +155,13 @@ pub async fn ble_frontend_task(
         let sys_config = crate::storage::SYSTEM_CONFIG.get_or_default().await;
         match advertise_once(&mut periph, &sys_config.ble_adv_name).await {
             Ok(connection) => {
+                let time_logger = crate::LogTimeOfScope::new("Updating connection parameters");
                 let _ = update_connection_params(stack, &connection)
                     .await
                     .map_err(|err| {
                         defmt::error!("Error updating the connection parameters{}", err)
                     });
+                drop(time_logger);
                 if conn.on_connected(connection).await.is_ok() {
                     let _ = conn.run().await;
                 }
