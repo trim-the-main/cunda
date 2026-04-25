@@ -24,7 +24,7 @@ build-firmware-release:
 # Run the firmware in debug mode (uses espflash runner from .cargo/config.toml)
 [working-directory('firmware')]
 run-firmware-debug:
-    DEFMT_LOG=info,firmware=debug cargo run
+    DEFMT_LOG=info,firmware=debug,postcard_rpc_ble=debug cargo run
 
 # Run the firmware in release mode
 [working-directory('firmware')]
