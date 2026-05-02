@@ -84,13 +84,9 @@ async fn start_sys_stats_topic(
     sender: Sender<BleWireTxImpl>,
 ) {
     defmt::debug!("Handling start_sys_stats_topic");
-    let Some((_key, topic_stop_signal)) = context
+    let topic_stop_signal = context
         .task_table
-        .iter()
-        .find(|(key, _)| **key == protocol::topics::SysStatsTopic::TOPIC_KEY)
-    else {
-        panic!("We should have one task_table entry for every topic");
-    };
+        .stop_signal(protocol::topics::SysStatsTopic::TOPIC_KEY);
     topic_stop_signal.try_take(); // clear the pending stop signals (we haven't responded to the start request yet.)
     let _guard = crate::stats::start_collecting_stats();
     if let Err(err) = sender
@@ -127,13 +123,9 @@ async fn stop_sys_stats_topic(
 ) -> protocol::endpoints::EmptyRes {
     defmt::debug!("Handling stop_sys_stats_topic");
 
-    let Some((_key, topic_stop_signal)) = context
+    let topic_stop_signal = context
         .task_table
-        .iter()
-        .find(|(key, _)| **key == protocol::topics::SysStatsTopic::TOPIC_KEY)
-    else {
-        panic!("We should have one task_table entry for every topic");
-    };
+        .stop_signal(protocol::topics::SysStatsTopic::TOPIC_KEY);
     topic_stop_signal.signal(());
     protocol::endpoints::EmptyRes {}
 }
@@ -235,13 +227,9 @@ async fn start_button_events_topic(
     sender: Sender<BleWireTxImpl>,
 ) {
     defmt::debug!("Handling start_button_events_topic");
-    let Some((_key, topic_stop_signal)) = context
+    let topic_stop_signal = context
         .task_table
-        .iter()
-        .find(|(key, _)| **key == protocol::topics::ButtonEvents::TOPIC_KEY)
-    else {
-        panic!("We should have one task_table entry for every topic");
-    };
+        .stop_signal(protocol::topics::ButtonEvents::TOPIC_KEY);
     // Consume any pending stop signal, these have arrived before we started (we started the task, we are in it,
     // but we haven't responded to the spawn Rpc request yet. So for the client we are still starting...)
     let _ = topic_stop_signal.try_take();
@@ -275,13 +263,9 @@ async fn stop_button_events_topic(
 ) -> protocol::endpoints::EmptyRes {
     defmt::error!("Handling stop_button_events_topic");
 
-    let Some((_key, topic_stop_signal)) = context
+    let topic_stop_signal = context
         .task_table
-        .iter()
-        .find(|(key, _)| **key == protocol::topics::ButtonEvents::TOPIC_KEY)
-    else {
-        panic!("We should have one task_table entry for every topic");
-    };
+        .stop_signal(protocol::topics::ButtonEvents::TOPIC_KEY);
     topic_stop_signal.signal(());
     protocol::endpoints::EmptyRes {}
 }
@@ -312,7 +296,17 @@ const fn topic_state<const SIZE: usize>(map: TopicMap) -> [(&'static Key, TopicS
 }
 
 pub type TopicStopSignal = Signal<CriticalSectionRawMutex, ()>;
-pub type TopicTaskTable = &'static [(&'static Key, TopicStopSignal)];
+#[derive(Copy, Clone)]
+pub struct TopicTaskTable(&'static [(&'static Key, TopicStopSignal)]);
+impl TopicTaskTable {
+    fn stop_signal(&self, topic_key: postcard_rpc::Key) -> &TopicStopSignal {
+        self.0
+            .iter()
+            .find(|(key, _)| **key == topic_key)
+            .map(|(_key, signal)| signal)
+            .expect("Every topic has to have a topic task entry")
+    }
+}
 static TOPIC_TASK_STATE: [(&'static Key, TopicStopSignal); protocol::topics::TOPICS.topics.len()] =
     topic_state(protocol::topics::TOPICS);
 
@@ -330,7 +324,7 @@ impl DispatchContext {
         tx: BleWireTxImpl,
     ) -> Self {
         Self {
-            task_table: &TOPIC_TASK_STATE,
+            task_table: TopicTaskTable(&TOPIC_TASK_STATE),
             button,
             led,
             tx,
@@ -342,6 +336,7 @@ pub struct DispatchSpawnContext {
     pub task_table: TopicTaskTable,
     pub button: &'static Mutex<Input<'static>>,
 }
+
 impl SpawnContext for DispatchContext {
     type SpawnCtxt = DispatchSpawnContext;
 
@@ -372,13 +367,9 @@ async fn start_bandwidth_test_topic(
     sender: Sender<BleWireTxImpl>,
 ) {
     defmt::debug!("Handling start_bandwidth_test_topic");
-    let Some((_key, topic_stop_signal)) = context
+    let topic_stop_signal = context
         .task_table
-        .iter()
-        .find(|(key, _)| **key == protocol::topics::BandwidthTestTopic::TOPIC_KEY)
-    else {
-        panic!("We should have one task_table entry for every topic");
-    };
+        .stop_signal(protocol::topics::BandwidthTestTopic::TOPIC_KEY);
 
     let _ = topic_stop_signal.try_take();
     if sender
@@ -421,13 +412,9 @@ async fn stop_bandwidth_test_topic(
 ) -> protocol::endpoints::EmptyRes {
     defmt::error!("Handling stop_bandwidth_test_topic");
 
-    let Some((_key, topic_stop_signal)) = context
+    let topic_stop_signal = context
         .task_table
-        .iter()
-        .find(|(key, _)| **key == protocol::topics::BandwidthTestTopic::TOPIC_KEY)
-    else {
-        panic!("We should have one task_table entry for every topic");
-    };
+        .stop_signal(protocol::topics::BandwidthTestTopic::TOPIC_KEY);
     topic_stop_signal.signal(());
     protocol::endpoints::EmptyRes {}
 }
