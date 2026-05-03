@@ -32,6 +32,46 @@ run-firmware-release:
     cargo run --release
 
 # ==============================================================================
+# Firmware Size Analysis
+# ==============================================================================
+
+# Path to ESP toolchain binutils
+esp_tools := env('HOME') / ".rustup/toolchains/esp/xtensa-esp-elf/esp-15.2.0_20250920/xtensa-esp-elf/bin"
+elf := "firmware/target/xtensa-esp32-none-elf/release/firmware"
+
+# Show section sizes (.text, .rodata, .data, .bss, etc.)
+size-sections:
+    {{esp_tools}}/xtensa-esp32-elf-size -A {{elf}}
+
+# Show the N largest code symbols (default: 50)
+size-symbols n='50':
+    {{esp_tools}}/xtensa-esp32-elf-nm --size-sort -S --radix=d {{elf}} | rustfilt | grep ' [tT] ' | tail -{{n}}
+
+# Aggregate code size by crate/module
+size-crates:
+    {{esp_tools}}/xtensa-esp32-elf-nm --size-sort -S --radix=d {{elf}} \
+      | rustfilt \
+      | grep ' [tT] ' \
+      | awk '{size=$2; name=$4; split(name, parts, "::"); crate=parts[1]; sizes[crate]+=size} END {for (c in sizes) printf "%8d  %s\n", sizes[c], c}' \
+      | sort -rn
+
+# Source file attribution via bloaty (requires bloaty + debug info)
+size-bloaty n='50':
+    bloaty {{elf}} -d compileunits -n {{n}}
+
+# Differential size analysis between two ELF binaries
+size-diff old new:
+    bloaty {{new}} -- {{old}} -d compileunits
+
+# Show Future/async state machine enum sizes, sorted by total size (requires nightly -Zprint-type-sizes)
+[working-directory('firmware')]
+size-futures filter='':
+    RUSTFLAGS="-Zprint-type-sizes" cargo build --release 2>&1 \
+      | grep 'print-type-size' \
+      | grep -i '{{filter}}' \
+      | sort -t: -k2 -rn
+
+# ==============================================================================
 # Flutter
 # ==============================================================================
 
