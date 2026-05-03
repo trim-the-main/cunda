@@ -18,7 +18,7 @@ use protocol::{
     v1::{MemoryUsage, SysStats},
 };
 
-async fn get_firmware_version(
+fn get_firmware_version(
     _context: &mut DispatchContext,
     _header: VarHeader,
     _rqst: NoArg,
@@ -55,7 +55,8 @@ async fn set_sys_settings(
     }
     protocol::endpoints::EmptyRes {}
 }
-async fn sys_ping(
+
+fn sys_ping(
     _context: &mut DispatchContext,
     _header: VarHeader,
     _rqst: NoArg,
@@ -164,6 +165,7 @@ async fn set_appl_settings(
     }
     protocol::endpoints::EmptyRes {}
 }
+
 async fn blink_led_n_times(
     context: &mut DispatchContext,
     _header: VarHeader,
@@ -270,7 +272,7 @@ async fn stop_button_events_topic(
     protocol::endpoints::EmptyRes {}
 }
 
-async fn echo(
+fn echo(
     _context: &mut DispatchContext,
     _header: VarHeader,
     rqst: EchoRequest,
@@ -419,7 +421,7 @@ async fn stop_bandwidth_test_topic(
     protocol::endpoints::EmptyRes {}
 }
 
-async fn do_nothing(
+fn do_nothing(
     _context: &mut DispatchContext,
     _header: VarHeader,
     _rqst: BandwidthTestData,
@@ -440,10 +442,10 @@ define_dispatch! {
 
         | EndpointTy                | kind      | handler                       |
         | ----------                | ----      | -------                       |
-        | GetFirmwareVersion        | async     | get_firmware_version          |
+        | GetFirmwareVersion        | blocking  | get_firmware_version          |
         | GetSysSettings      | async               | get_sys_settings      |
         | SetSysSettings      | async               | set_sys_settings      |
-        | PingEndpoint        | async               | sys_ping              |
+        | PingEndpoint        | blocking            | sys_ping              |
         | StartSysStatsTopic  | spawn               | start_sys_stats_topic |
         | StopSysStatsTopic   | async               | stop_sys_stats_topic  |
         | GetMtu              | async               | get_mtu               |
@@ -458,10 +460,10 @@ define_dispatch! {
         | BlinkLedEndpoint        | async             | blink_led_n_times  |
         | StartButtonEventsTopic  | spawn             | start_button_events_topic |
         | StopButtonEventsTopic   | async             | stop_button_events_topic  |
-        | EchoEndpoint            | async             | echo                      |
+        | EchoEndpoint            | blocking          | echo                      |
         | StartTestTopicBandwidth | spawn             | start_bandwidth_test_topic           |
         | StopTestTopicBandwidth  | async             | stop_bandwidth_test_topic            |
-        | TestBandwidth           | async             | do_nothing                           |
+        | TestBandwidth           | blocking          | do_nothing                           |
     };
     topics_in: {
         list: protocol::topics::EMPTY_TOPICS;
