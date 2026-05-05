@@ -3,7 +3,7 @@ use core::cell::RefCell;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Sender;
 use postcard_rpc::server::WireRxErrorKind;
-use trouble_host::{gatt::GattConnection, prelude::*};
+use trouble_host::prelude::*;
 
 use crate::PrpcBleStorage;
 use crate::gatt::GattServerRpc;

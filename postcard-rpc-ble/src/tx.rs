@@ -9,10 +9,9 @@ use postcard::{
 use postcard_rpc::header::VarHeader;
 use postcard_rpc::server::{WireTx, WireTxErrorKind};
 use serde::Serialize;
-use trouble_host::{gatt::GattConnection, prelude::*};
+use trouble_host::prelude::*;
 
 use crate::PrpcBleStorage;
-use crate::ack::{AckQueue, WakeReason};
 use crate::gatt::{BytesCh, GATT_OVERHEAD, GattServerRpc};
 
 pub(crate) trait ChunkSender {

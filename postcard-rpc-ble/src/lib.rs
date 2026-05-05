@@ -1,6 +1,5 @@
 #![no_std]
 
-mod ack;
 mod conn;
 mod dispatcher;
 mod gatt;
@@ -11,7 +10,7 @@ use core::cell::RefCell;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use maitake_sync::{RwLock, WaitCell};
-use trouble_host::{gatt::GattConnection, prelude::*};
+use trouble_host::prelude::*;
 
 use gatt::GattServerRpc;
 use tx::TxBufferShared;
