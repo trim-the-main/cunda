@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1/endpoints.dart';
@@ -116,4 +117,31 @@ Future<int> getMtuFromDevice(Ref ref, BluetoothDevice device) async {
   );
   _log.fine("Calling getMtu RPC endpoint");
   return await eDispatcher.getMtu(req: NoArg());
+}
+
+// defmt logs coming through a topic
+@Riverpod(keepAlive: true, retry: noRetry)
+Stream<(DateTime, Uint8List)> deviceLogs(
+  Ref ref,
+  BluetoothDevice device,
+) async* {
+  final eDispatcher = await ref.watch(
+    endpointDispatcherProvider(device).future,
+  );
+  final tDispatcher = await ref.watch(topicDispatcherProvider(device).future);
+  final logStream = tDispatcher.createSysLogsTopicStream();
+
+  eDispatcher.startSysLogsTopic(req: NoArg());
+  ref.onCancel(() {
+    _log.warning("Stop sys logs stream, we got canceled");
+    eDispatcher.stopSysLogsTopic(req: NoArg());
+  });
+  ref.onResume(() {
+    _log.warning("Resume sys logs stream");
+    eDispatcher.startButtonEventsTopic(req: NoArg());
+  });
+  await for (final logMsg in logStream) {
+    yield (DateTime.now(), logMsg.defmtBytes);
+    _log.info("[DEVICE LOG] ${logMsg.defmtBytes}");
+  }
 }

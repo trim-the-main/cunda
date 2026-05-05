@@ -85,7 +85,7 @@ where
 }
 
 use protocol::{
-    topics::{ButtonEvent, ButtonEvents, SysStatsTopic},
+    topics::{ButtonEvent, ButtonEvents, LogMessage, SysLogsTopic, SysStatsTopic},
     v1::SysStats,
 };
 frb_prpc_juggle::topic_dispatcher_trait! {
@@ -94,6 +94,7 @@ frb_prpc_juggle::topic_dispatcher_trait! {
     | TopicTy       | MessageTy
     | -------       | ---------
     | SysStatsTopic | SysStats
+    | SysLogsTopic  | LogMessage
     | ButtonEvents  | ButtonEvent
     | BandwidthTestTopic | BandwidthTestTopicData
 }

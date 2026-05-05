@@ -9,6 +9,7 @@
 
 use embassy_executor::Spawner;
 use embassy_time::{Duration, Timer};
+use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
 use esp_hal::gpio::{Input, InputConfig, Level, Output, OutputConfig};
 use esp_hal::interrupt::software::SoftwareInterruptControl;
@@ -16,7 +17,6 @@ use esp_hal::system::Stack;
 use esp_hal::timer::timg::TimerGroup;
 use esp_rtos::embassy::Executor;
 use static_cell::StaticCell;
-use {esp_backtrace as _, esp_println as _};
 
 use maitake_sync::Mutex;
 
@@ -59,6 +59,10 @@ async fn second_cpu_main() {
 async fn main(spawner: Spawner) -> ! {
     // generator version: 1.1.0
 
+    // SAFETY:
+    // unwrap is safe here because this is the first call to init
+    let logger = defmt_brtt::init!().unwrap();
+
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
 
@@ -99,7 +103,7 @@ async fn main(spawner: Spawner) -> ! {
     )));
     let led = Output::new(peripherals.GPIO2, Level::Low, OutputConfig::default());
 
-    ble_init(spawner, peripherals.BT, button, led).await;
+    ble_init(spawner, peripherals.BT, button, led, logger).await;
     defmt::info!("BLE tasks are spawned, main thread is sleep looping.");
 
     loop {

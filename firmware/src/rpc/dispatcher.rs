@@ -1,5 +1,6 @@
-use core::mem::MaybeUninit;
+use core::{cell::RefCell, mem::MaybeUninit};
 
+use defmt_brtt::DefmtConsumer;
 use embassy_futures::select::{Either, select};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
 use embassy_time::{Duration, Instant, Ticker, Timer};
@@ -13,7 +14,8 @@ use postcard_rpc::{
 use protocol::{
     endpoints::*,
     topics::{
-        BandwidthTestTopic, BandwidthTestTopicData, ButtonEvent, ButtonEvents, SysStatsTopic,
+        BandwidthTestTopic, BandwidthTestTopicData, ButtonEvent, ButtonEvents, LogMessage,
+        SysLogsTopic, SysStatsTopic,
     },
     v1::{MemoryUsage, SysStats},
 };
@@ -117,7 +119,7 @@ async fn start_sys_stats_topic(
     }
 }
 
-async fn stop_sys_stats_topic(
+fn stop_sys_stats_topic(
     context: &mut DispatchContext,
     _header: VarHeader,
     _rqst: NoArg,
@@ -127,6 +129,76 @@ async fn stop_sys_stats_topic(
     let topic_stop_signal = context
         .task_table
         .stop_signal(protocol::topics::SysStatsTopic::TOPIC_KEY);
+    topic_stop_signal.signal(());
+    protocol::endpoints::EmptyRes {}
+}
+
+#[embassy_executor::task]
+async fn start_sys_logs_topic(
+    context: DispatchSpawnContext,
+    header: VarHeader,
+    _rqst: NoArg,
+    sender: Sender<BleWireTxImpl>,
+) {
+    defmt::debug!("Handling start_sys_logs_topic");
+    let topic_stop_signal = context
+        .task_table
+        .stop_signal(protocol::topics::SysLogsTopic::TOPIC_KEY);
+    topic_stop_signal.try_take(); // clear the pending stop signals (we haven't responded to the start request yet.)
+    if let Err(err) = sender
+        .reply::<StartSysLogsTopic>(header.seq_no, &(().into()))
+        .await
+    {
+        defmt::error!(
+            "Failed to reply to start_sys_stats_topic rpc message {}",
+            err
+        );
+        return;
+    }
+
+    let mut seq = 0u8;
+
+    // Only one task exists and this is the only place we borrow. This is exclusive:
+    let mut logger = context.logger.borrow_mut();
+
+    loop {
+        // let logs_to_send: LogMessage = Default::default();
+
+        let logs_to_send = match select(logger.wait_for_log(), topic_stop_signal.wait()).await {
+            Either::First(grant) => {
+                // Here we are sending the log messages. Don't log anything in this block
+                let mut log_msg = LogMessage::default();
+                log_msg.defmt_bytes.clear();
+                log_msg
+                    .defmt_bytes
+                    .extend_from_slice(grant.buf())
+                    .expect("defmt-brtt buffer should fit in LogMessage");
+                grant.release(log_msg.defmt_bytes.len());
+                log_msg
+            }
+            Either::Second(_) => break,
+        };
+        if let Err(err) = sender
+            .publish::<SysLogsTopic>(seq.into(), &logs_to_send)
+            .await
+        {
+            defmt::error!("Send error! {}", err);
+            break;
+        }
+        seq = seq.wrapping_add(1);
+    }
+}
+
+fn stop_sys_logs_topic(
+    context: &mut DispatchContext,
+    _header: VarHeader,
+    _rqst: NoArg,
+) -> protocol::endpoints::EmptyRes {
+    defmt::debug!("Handling stop_sys_logs_topic");
+
+    let topic_stop_signal = context
+        .task_table
+        .stop_signal(protocol::topics::SysLogsTopic::TOPIC_KEY);
     topic_stop_signal.signal(());
     protocol::endpoints::EmptyRes {}
 }
@@ -316,6 +388,7 @@ pub(crate) struct DispatchContext {
     task_table: TopicTaskTable,
     pub(crate) button: &'static Mutex<Input<'static>>,
     pub(crate) led: Output<'static>,
+    pub(crate) logger: &'static RefCell<DefmtConsumer>,
     tx: BleWireTxImpl,
 }
 
@@ -323,12 +396,14 @@ impl DispatchContext {
     pub fn new(
         button: &'static Mutex<Input<'static>>,
         led: Output<'static>,
+        logger: &'static RefCell<DefmtConsumer>,
         tx: BleWireTxImpl,
     ) -> Self {
         Self {
             task_table: TopicTaskTable(&TOPIC_TASK_STATE),
             button,
             led,
+            logger,
             tx,
         }
     }
@@ -337,6 +412,7 @@ impl DispatchContext {
 pub struct DispatchSpawnContext {
     pub task_table: TopicTaskTable,
     pub button: &'static Mutex<Input<'static>>,
+    pub logger: &'static RefCell<DefmtConsumer>,
 }
 
 impl SpawnContext for DispatchContext {
@@ -345,7 +421,8 @@ impl SpawnContext for DispatchContext {
     fn spawn_ctxt(&mut self) -> Self::SpawnCtxt {
         DispatchSpawnContext {
             task_table: self.task_table,
-            button: &self.button,
+            button: self.button,
+            logger: self.logger,
         }
     }
 }
@@ -447,7 +524,9 @@ define_dispatch! {
         | SetSysSettings      | async               | set_sys_settings      |
         | PingEndpoint        | blocking            | sys_ping              |
         | StartSysStatsTopic  | spawn               | start_sys_stats_topic |
-        | StopSysStatsTopic   | async               | stop_sys_stats_topic  |
+        | StopSysStatsTopic   | blocking            | stop_sys_stats_topic  |
+        | StartSysLogsTopic   | spawn               | start_sys_logs_topic  |
+        | StopSysLogsTopic    | blocking            | stop_sys_logs_topic   |
         | GetMtu              | async               | get_mtu               |
         | PrepareOta          | async | ota_prepare          |
         | TransferOtaBytes    | async | ota_transfer_bytes   |

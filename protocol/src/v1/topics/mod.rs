@@ -17,6 +17,7 @@ topics! {
     | -------       | ---------     | ----               | --- |
     // System topics
     | SysStatsTopic | SysStats      | "sys_stats_stream" |     |
+    | SysLogsTopic  | LogMessage    | "sys_logs_stream"  |     |
     // Application topics
     | ButtonEvents       | ButtonEvent           | "button_events"        |     |
     | BandwidthTestTopic | BandwidthTestTopicData| "bandwidth_test_topic" |     |
@@ -48,4 +49,9 @@ impl BandwidthTestTopicData {
                 .collect(),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Schema, Debug, Clone, Default)]
+pub struct LogMessage {
+    pub defmt_bytes: ProtocolVecType!(u8, 1024),
 }

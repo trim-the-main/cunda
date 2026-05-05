@@ -1,5 +1,8 @@
+use core::cell::RefCell;
+
 use bt_hci::cmd::le::{LeConnUpdate, LeReadLocalSupportedFeatures, LeSetDataLength};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
+use defmt_brtt::DefmtConsumer;
 use embassy_executor::{Spawner, SpawnerTraceExt};
 use embassy_time::Duration;
 use esp_hal::gpio::{Input, Output};
@@ -33,6 +36,7 @@ pub async fn ble_init(
     device: esp_hal::peripherals::BT<'static>,
     button: &'static Mutex<Input<'static>>,
     led: Output<'static>,
+    logger: DefmtConsumer,
 ) {
     static RADIO: StaticCell<esp_radio::Controller<'static>> = StaticCell::new();
     let radio_init =
@@ -79,7 +83,9 @@ pub async fn ble_init(
     spawner
         .spawn_named(
             "BleFrontendTask",
-            ble_frontend_task(conn, peripheral, spawner, button, led, tx, d_runner, stack),
+            ble_frontend_task(
+                conn, peripheral, spawner, button, led, logger, tx, d_runner, stack,
+            ),
         )
         .expect("Failed to spawn BleFrontendTask");
 }
@@ -131,6 +137,7 @@ pub async fn ble_frontend_task(
     spawner: Spawner,
     button: &'static Mutex<Input<'static>>,
     led: Output<'static>,
+    logger: DefmtConsumer,
     tx: BleWireTxImpl,
     d_runner: DispatcherRunner<'static, 'static, 'static, 1>,
     stack: &'static Stack<
@@ -139,8 +146,10 @@ pub async fn ble_frontend_task(
         DefaultPacketPool,
     >,
 ) {
+    static LOGGER: StaticCell<RefCell<DefmtConsumer>> = StaticCell::new();
+    let logger = LOGGER.init(RefCell::new(logger));
     // Create and spawn the dispatcher task
-    let context = DispatchContext::new(button, led, tx.clone());
+    let context = DispatchContext::new(button, led, logger, tx.clone());
     let dispatcher = BleDispatcher::new(context, spawner.into());
     let vkk = dispatcher.min_key_len();
 

@@ -17,6 +17,8 @@ endpoints! {
     | PingEndpoint        | NoArg       | EmptyRes               | "sys_ping"              |
     | StartSysStatsTopic  | NoArg       | EmptyRes               | "start_sys_stats_topic" |
     | StopSysStatsTopic   | NoArg       | EmptyRes               | "stop_sys_stats_topic"  |
+    | StartSysLogsTopic   | NoArg       | EmptyRes               | "start_sys_logs_topic"  |
+    | StopSysLogsTopic    | NoArg       | EmptyRes               | "stop_sys_logs_topic"   |
     | GetMtu              | NoArg       | u16                    | "get_mtu"               |
     // OTA related endpoints
     | PrepareOta          | OtaMData    | OtaResult              | "prepare_ota"              |

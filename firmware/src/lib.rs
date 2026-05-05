@@ -29,3 +29,5 @@ impl Drop for LogTimeOfScope {
         defmt::info!("{} took {} ms", self.name, took.as_millis());
     }
 }
+
+defmt::timestamp!("{=u64} us", embassy_time::Instant::now().as_micros());

@@ -3,6 +3,7 @@ import 'package:cunda_flutter/pages/device/tab_1_system_page.dart';
 import 'package:cunda_flutter/pages/device/tab_2_settings_page.dart';
 import 'package:cunda_flutter/pages/device/tab_3_bandwidth_page.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
+import 'package:cunda_flutter/providers/rpc/protocol.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -67,6 +68,7 @@ class ConnectionStatusDot extends ConsumerWidget {
     bool isConnected =
         ref.watch(connectionManagerProvider(device)) ==
         ConnectionTransitionState.connected;
+    final _logStream = ref.watch(deviceLogsProvider(device));
     return Container(
       width: 10,
       height: 10,
