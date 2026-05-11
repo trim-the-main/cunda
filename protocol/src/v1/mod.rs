@@ -1,6 +1,8 @@
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
+pub const VERSION: u32 = 1;
+
 pub mod endpoints;
 pub mod topics;
 

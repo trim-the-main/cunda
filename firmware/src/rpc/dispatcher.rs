@@ -20,14 +20,25 @@ use protocol::{
     v1::{MemoryUsage, SysStats},
 };
 
-fn get_firmware_version(
+protocol::define_mayna_metadata! {
+    device_type: "cunda",
+    firmware_version: env!("CARGO_PKG_VERSION"),
+    protocol_version: protocol::v1::VERSION,
+}
+
+fn get_device_id(
     _context: &mut DispatchContext,
     _header: VarHeader,
     _rqst: NoArg,
-) -> protocol::endpoints::VersionString {
-    defmt::debug!("Handling get_firmware_version");
-    use core::str::FromStr;
-    VersionString::from_str("v0.0.1").expect("Version string too long")
+) -> protocol::types::DeviceId {
+    defmt::debug!("Handling get_device_id");
+    protocol::types::DeviceId::new(
+        protocol::get_mayna_metadata!(device_type),
+        0,
+        0,
+        protocol::get_mayna_metadata!(firmware_version),
+        protocol::get_mayna_metadata!(protocol_version),
+    )
 }
 
 async fn get_sys_settings(
@@ -517,9 +528,9 @@ define_dispatch! {
     endpoints: {
         list: protocol::endpoints::ENDPOINT_LIST;
 
-        | EndpointTy                | kind      | handler                       |
-        | ----------                | ----      | -------                       |
-        | GetFirmwareVersion        | blocking  | get_firmware_version          |
+        | EndpointTy          | kind                | handler               |
+        | ----------          | ----                | -------               |
+        | GetDeviceId         | blocking            | get_device_id         |
         | GetSysSettings      | async               | get_sys_settings      |
         | SetSysSettings      | async               | set_sys_settings      |
         | PingEndpoint        | blocking            | sys_ping              |

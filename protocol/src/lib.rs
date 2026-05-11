@@ -1,44 +1,10 @@
 #![cfg_attr(not(feature = "flutter"), no_std)]
 
-#[cfg(feature = "flutter")]
-macro_rules! ProtocolStringType {
-    () => {
-        ::std::string::String
-    };
-    ($N:expr) => {
-        ::std::string::String
-    };
-    (capacity: $N:literal) => {
-        ::std::string::String
-    };
-}
+#[macro_use]
+pub mod types;
 
-#[cfg(not(feature = "flutter"))]
-macro_rules! ProtocolStringType {
-    () => {
-        ProtocolStringType!(16)
-    };
-    ($N:expr) => {
-        ProtocolStringType!(capacity: $N)
-    };
-    (capacity: $N:literal) => {
-        ::heapless::String<$N>
-    };
-}
-
-#[cfg(feature = "flutter")]
-macro_rules! ProtocolVecType {
-    ($t:ty, $N:expr) => {
-        ::std::vec::Vec<$t>
-    };
-}
-
-#[cfg(not(feature = "flutter"))]
-macro_rules! ProtocolVecType {
-    ($t:ty, $N:expr) => {
-        ::heapless::Vec<$t, $N>
-    };
-}
+#[macro_use]
+pub mod macros;
 
 pub mod v1;
 

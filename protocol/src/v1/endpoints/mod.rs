@@ -11,7 +11,7 @@ endpoints! {
     // System Endpoints
     | EndpointTy          | RequestTy   | ResponseTy             | Path                    |
     | ----------          | ---------   | ----------             | ----                    |
-    | GetFirmwareVersion  | NoArg       | VersionString          | "get_firmware_version"  |
+    | GetDeviceId         | NoArg       | DeviceId               | "get_device_id"         |
     | GetSysSettings      | NoArg       | SysSettings            | "get_sys_settings"      |
     | SetSysSettings      | SysSettings | EmptyRes               | "set_sys_settings"      |
     | PingEndpoint        | NoArg       | EmptyRes               | "sys_ping"              |
@@ -74,6 +74,8 @@ use std::string::String;
 
 #[cfg(not(feature = "flutter"))]
 use heapless::String;
+
+use crate::types::DeviceId;
 
 impl SysSettings {
     pub const fn new() -> Self {

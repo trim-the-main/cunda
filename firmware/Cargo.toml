@@ -10,6 +10,7 @@ path = "./src/bin/main.rs"
 
 [dependencies]
 bt-hci = "0.6.0"
+const_format = "0.2.36"
 cobs_accumulator = { path = "../cobs_accumulator" }
 cordyceps = "0.3.4"
 critical-section = "1.2.0"
