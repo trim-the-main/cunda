@@ -10,7 +10,7 @@ use frb_prpc_juggle::client_interface::{
     ClientEndpointInterface, ClientTopicInterface, FrbPostcardRpcError, TopicSink,
 };
 use postcard_rpc::{Key, Topic};
-use protocol::{endpoints::*, topics::*, v1::*};
+use protocol::{endpoints::*, topics::*, types::DeviceId, v1::*};
 use rand::Rng;
 use serde::de::DeserializeOwned;
 use tokio::sync::Mutex;
@@ -80,13 +80,10 @@ impl ClientEndpointInterface for DummyFlutterProtocolClient {
 }
 
 impl EndpointDispatcher for DummyFlutterProtocolClient {
-    async fn get_firmware_version(
-        &self,
-        _req: NoArg,
-    ) -> Result<VersionString, FrbPostcardRpcError> {
-        log::debug!("Get firmware version called");
+    async fn get_device_id(&self, _req: NoArg) -> Result<DeviceId, FrbPostcardRpcError> {
+        log::debug!("Get device id called");
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-        Ok(String::from_str("v0.0.1").unwrap())
+        Ok(DeviceId::default())
     }
 
     async fn get_sys_settings(&self, _req: NoArg) -> Result<SysSettings, FrbPostcardRpcError> {

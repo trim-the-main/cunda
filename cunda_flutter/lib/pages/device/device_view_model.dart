@@ -21,8 +21,8 @@ Future<String> firmwareVersion(Ref ref, BluetoothDevice device) async {
     endpointDispatcherProvider(device).future,
   );
   _log.fine("Calling getFirmware RPC endpoint");
-  final res = await eDispatcher.getFirmwareVersion(req: NoArg());
-  return res;
+  final res = await eDispatcher.getDeviceId(req: NoArg());
+  return res.firmwareVersion;
 }
 
 @riverpod

@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-#[flutter_rust_bridge::frb(mirror(defmt_parser::Level))]
+pub use defmt_parser::Level;
+
+#[flutter_rust_bridge::frb(mirror(Level))]
 pub enum _Level {
     Trace,
     Debug,
@@ -11,9 +13,9 @@ pub enum _Level {
 
 #[derive(Debug, Clone)]
 pub struct DefmtLogEntry {
-    pub level: Option<defmt_parser::Level>,
+    pub level: Option<Level>,
     pub timestamp: String,
-    pub location: Option<defmt_decoder::Location>,
+    pub location: Option<String>,
     pub msg: String,
 }
 
@@ -32,8 +34,7 @@ pub enum LogDecodingError {
 }
 
 impl LogDecoderDefmt {
-    #[flutter_rust_bridge::frb(sync)]
-    pub fn load(
+    pub(crate) fn load(
         table_bytes: &[u8],
         locations_bytes: Option<&[u8]>,
     ) -> Result<Self, LogDecodingError> {
@@ -68,7 +69,7 @@ impl LogDecoderDefmt {
                         location: self
                             .locations
                             .get(&frame.index())
-                            .and_then(|loc| Some(loc.to_owned())),
+                            .and_then(|loc| Some(format!("{:?}", loc))),
                         msg: frame.display_message().to_string(),
                     };
                     ret.push(entry);
