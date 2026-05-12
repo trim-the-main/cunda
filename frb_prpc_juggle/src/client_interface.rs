@@ -1,6 +1,3 @@
-use core::sync::atomic;
-
-use postcard_rpc::header::VarKeyKind;
 use postcard_rpc::standard_icd::WireError as RpcWireError;
 use postcard_rpc::{Endpoint, Key, Topic, header, host_client::RpcFrame};
 use tokio::sync::{Mutex, RwLock, oneshot};
