@@ -3,15 +3,20 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/lib.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1/endpoints.dart';
+import 'package:cunda_flutter/pages/device/device_view_model.dart';
+import 'package:cunda_flutter/providers/package_registry_provider.dart';
 import 'package:cunda_flutter/providers/rpc/protocol.dart';
+import 'package:cunda_flutter/services/mayna/package_registry.dart';
+import 'package:cunda_flutter/services/mayna/version.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logging/logging.dart';
 
-final log = Logger('OtaSection');
+final _log = Logger('OtaSection');
 
 class OtaSection extends ConsumerStatefulWidget {
   const OtaSection({super.key, required this.device});
@@ -23,24 +28,50 @@ class OtaSection extends ConsumerStatefulWidget {
 }
 
 class _OtaSectionState extends ConsumerState<OtaSection> {
-  File? firmwareFile;
+  bool _importing = false;
+  String? _importResult;
+  String? _importError;
 
-  @override
-  void initState() {
-    super.initState();
+  Future<void> _importPackage() async {
+    final result = await FilePicker.platform.pickFiles();
+    if (result == null) return;
+
+    setState(() {
+      _importing = true;
+      _importResult = null;
+      _importError = null;
+    });
+
+    try {
+      final registry = await ref.read(packageRegistryProvider.future);
+      final manifest = await registry.import(File(result.files.single.path!));
+      if (mounted) {
+        setState(() {
+          _importing = false;
+          _importResult =
+              'Imported ${manifest.deviceType} v${manifest.firmwareVersion}';
+        });
+      }
+    } catch (e) {
+      _log.warning('Failed to import .mayna package: $e');
+      if (mounted) {
+        setState(() {
+          _importing = false;
+          _importError = 'Import failed: $e';
+        });
+      }
+    }
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
-  void update() {
+  void _startUpdate(File firmwareBinary, String version) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) =>
-          ProgressDialog(device: widget.device, file: firmwareFile!),
+      builder: (context) => ProgressDialog(
+        device: widget.device,
+        file: firmwareBinary,
+        version: version,
+      ),
     );
   }
 
@@ -58,7 +89,6 @@ class _OtaSectionState extends ConsumerState<OtaSection> {
               onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel'),
             ),
-            // The "Confirm" button
             TextButton(
               onPressed: () => Navigator.pop(context, true),
               child: const Text('Confirm', style: TextStyle(color: Colors.red)),
@@ -67,7 +97,6 @@ class _OtaSectionState extends ConsumerState<OtaSection> {
         );
       },
     ).then((value) {
-      // Check the result of the dialog
       if (value == true) {
         ref
             .read(endpointDispatcherProvider(widget.device))
@@ -83,7 +112,7 @@ class _OtaSectionState extends ConsumerState<OtaSection> {
                 }
               },
               error: (Object error, StackTrace stackTrace) {
-                log.warning("Error during factory reset: $error");
+                _log.warning("Error during factory reset: $error");
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text("Failed to factory reset the device."),
@@ -91,7 +120,7 @@ class _OtaSectionState extends ConsumerState<OtaSection> {
                 );
               },
               loading: () {
-                log.warning("eDispatcher is still loading...");
+                _log.warning("eDispatcher is still loading...");
               },
             );
       }
@@ -100,78 +129,150 @@ class _OtaSectionState extends ConsumerState<OtaSection> {
 
   @override
   Widget build(BuildContext context) {
-    List<Widget> tiles = [
-      Text(
-        "Firmware Update".toUpperCase(),
-        style: Theme.of(
-          context,
-        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-      ),
-      SizedBox(height: 20),
-    ];
-
-    if (firmwareFile != null) {
-      tiles.addAll([
-        Text("Selected file: ${firmwareFile!.path}"),
-        Text("File size: ${firmwareFile!.lengthSync()} bytes"),
-        SizedBox(height: 12),
-      ]);
-    }
-
-    tiles.addAll([
-      ElevatedButton(
-        onPressed: () async {
-          FilePickerResult? result = await FilePicker.platform.pickFiles();
-          log.fine("File picker result: $result");
-          if (result != null) {
-            setState(() {
-              firmwareFile = File(result.files.single.path!);
-            });
-          }
-        },
-        child: Text("Choose Firmware File"),
-      ),
-      SizedBox(height: 12),
-
-      ElevatedButton(
-        onPressed: firmwareFile != null ? update : null,
-        child: Text("Update"),
-      ),
-      SizedBox(height: 40),
-      Text(
-        "Factory Reset".toUpperCase(),
-        style: Theme.of(
-          context,
-        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-      ),
-      SizedBox(height: 20),
-      ElevatedButton(
-        onPressed: _factoryResetAreYouSureDialog,
-        child: Text("Reset"),
-      ),
-    ]);
     return ref
         .watch(systemSettingsProvider(widget.device))
         .when(
-          data: (settings) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: tiles,
-            );
-          },
+          data: (settings) => _buildContent(context),
           error: (Object error, StackTrace stackTrace) =>
               Text("Error getting system settings"),
           loading: () => Center(child: CircularProgressIndicator()),
         );
   }
+
+  Widget _buildContent(BuildContext context) {
+    final deviceIdAsync = ref.watch(deviceIdProvider(widget.device));
+    final registryAsync = ref.watch(packageRegistryProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Import section
+        Text(
+          "Package Import".toUpperCase(),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 12),
+        if (_importResult != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(_importResult!),
+          ),
+        if (_importError != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(_importError!, style: TextStyle(color: Colors.red)),
+          ),
+        ElevatedButton(
+          onPressed: _importing ? null : _importPackage,
+          child: _importing
+              ? SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text("Import .mayna Package"),
+        ),
+
+        SizedBox(height: 32),
+
+        // Update section
+        Text(
+          "Firmware Update".toUpperCase(),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 12),
+        _buildUpdateSection(deviceIdAsync, registryAsync),
+
+        SizedBox(height: 32),
+
+        // Factory reset section
+        Text(
+          "Factory Reset".toUpperCase(),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 12),
+        ElevatedButton(
+          onPressed: _factoryResetAreYouSureDialog,
+          child: Text("Reset"),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUpdateSection(
+    AsyncValue<DeviceId> deviceIdAsync,
+    AsyncValue<PackageRegistry> registryAsync,
+  ) {
+    if (deviceIdAsync is AsyncLoading || registryAsync is AsyncLoading) {
+      return Center(child: CircularProgressIndicator());
+    }
+    if (deviceIdAsync is AsyncError) {
+      return Text("Error getting device info");
+    }
+    if (registryAsync is AsyncError) {
+      return Text("Error loading package registry");
+    }
+
+    final deviceId = deviceIdAsync.value!;
+    final registry = registryAsync.value!;
+
+    final candidate = registry.findLatestCompatible(
+      deviceType: deviceId.deviceType,
+      currentFirmwareVersion: deviceId.firmwareVersion,
+      supportedProtocols: {deviceId.protocolVersion},
+    );
+
+    if (candidate == null ||
+        compareVersions(candidate.firmwareVersion, deviceId.firmwareVersion) <=
+            0) {
+      return Text("No update available");
+    }
+
+    final firmwareBinary = registry.componentPath(
+      candidate.deviceType,
+      candidate.firmwareVersion,
+      'firmware',
+    );
+
+    if (firmwareBinary == null) {
+      return Text(
+        "Update v${candidate.firmwareVersion} available "
+        "but firmware binary missing from package",
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("Update available: v${candidate.firmwareVersion}"),
+        SizedBox(height: 8),
+        ElevatedButton(
+          onPressed: () =>
+              _startUpdate(firmwareBinary, candidate.firmwareVersion),
+          child: Text("Update to v${candidate.firmwareVersion}"),
+        ),
+      ],
+    );
+  }
 }
 
 class ProgressDialog extends ConsumerStatefulWidget {
   final BluetoothDevice device;
-
   final File file;
+  final String version;
 
-  const ProgressDialog({super.key, required this.device, required this.file});
+  const ProgressDialog({
+    super.key,
+    required this.device,
+    required this.file,
+    required this.version,
+  });
 
   @override
   ConsumerState<ProgressDialog> createState() => _ProgressDialogState();
@@ -185,7 +286,6 @@ class _ProgressDialogState extends ConsumerState<ProgressDialog> {
   @override
   void initState() {
     super.initState();
-    // 1. This runs exactly ONCE when the dialog appears
     _startTransfer();
   }
 
@@ -193,15 +293,13 @@ class _ProgressDialogState extends ConsumerState<ProgressDialog> {
     int fileSize = widget.file.lengthSync();
 
     final stream = widget.file.openRead();
-
-    // 2. Pass the stream to the sha256 hash function
     final hash = await sha256.bind(stream).first;
     U8Array32 hashArray = U8Array32(Uint8List.fromList(hash.bytes));
 
     OtaMData otaMData = OtaMData(
       size: fileSize,
       hashSha256: hashArray,
-      version: "2.0.0",
+      version: widget.version,
     );
 
     final int chunkSize = 4096;
@@ -216,15 +314,15 @@ class _ProgressDialogState extends ConsumerState<ProgressDialog> {
             });
             if (await eDispatcher.prepareOta(req: otaMData) !=
                 OtaResult.transferReady) {
-              log.warning("Failed to prepare OTA");
+              _log.warning("Failed to prepare OTA");
               setState(() {
                 _hasError = true;
               });
               return;
             }
-            log.fine("OTA preparation successful, starting transfer");
+            _log.fine("OTA preparation successful, starting transfer");
             while (offset < fileSize) {
-              log.fine("Transferring chunk at offset $offset");
+              _log.fine("Transferring chunk at offset $offset");
               if (_isCancelled || !mounted) return;
 
               int bytesToRead = (offset + chunkSize > fileSize)
@@ -245,7 +343,7 @@ class _ProgressDialogState extends ConsumerState<ProgressDialog> {
                 req: otaBytes,
               );
               if (otaResult != OtaResult.transferReady) {
-                log.warning(
+                _log.warning(
                   "Failed to transfer OTA bytes with error: $otaResult",
                 );
                 setState(() {
@@ -256,7 +354,6 @@ class _ProgressDialogState extends ConsumerState<ProgressDialog> {
               }
               offset += bytesToRead;
 
-              // Update progress
               if (mounted) {
                 setState(() {
                   _progress = offset / fileSize;
@@ -267,13 +364,13 @@ class _ProgressDialogState extends ConsumerState<ProgressDialog> {
             await eDispatcher.finalizeOta(req: const NoArg());
           },
           error: (Object error, StackTrace stackTrace) {
-            log.warning("Error during OTA transfer: $error");
+            _log.warning("Error during OTA transfer: $error");
             setState(() {
               _hasError = true;
             });
           },
           loading: () {
-            log.warning("eDispatcher is still loading...");
+            _log.warning("eDispatcher is still loading...");
             setState(() {
               _progress = 0.0;
               _hasError = false;

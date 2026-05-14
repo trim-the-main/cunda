@@ -3,7 +3,7 @@ import 'package:cunda_flutter/pages/device/tab_1_system_page.dart';
 import 'package:cunda_flutter/pages/device/tab_2_settings_page.dart';
 import 'package:cunda_flutter/pages/device/tab_3_bandwidth_page.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
-import 'package:cunda_flutter/providers/rpc/protocol.dart';
+import 'package:cunda_flutter/pages/device/logs_page.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -12,6 +12,8 @@ import 'package:logging/logging.dart';
 
 // ignore: unused_element
 final _log = Logger('DevicePage');
+
+enum _DeviceMenuAction { logs }
 
 class DevicePage extends StatelessWidget {
   final BluetoothDevice device;
@@ -25,6 +27,22 @@ class DevicePage extends StatelessWidget {
         appBar: AppBar(
           title: _connectionPageTitle(),
           centerTitle: true,
+          actions: [
+            PopupMenuButton<_DeviceMenuAction>(
+              onSelected: (action) => switch (action) {
+                _DeviceMenuAction.logs => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => LogsPage(device: device)),
+                ),
+              },
+              itemBuilder: (BuildContext context) => const [
+                PopupMenuItem(
+                  value: _DeviceMenuAction.logs,
+                  child: Text('Logs'),
+                ),
+              ],
+            ),
+          ],
           bottom: const TabBar(
             tabs: [
               Tab(text: "Application"),
@@ -68,7 +86,6 @@ class ConnectionStatusDot extends ConsumerWidget {
     bool isConnected =
         ref.watch(connectionManagerProvider(device)) ==
         ConnectionTransitionState.connected;
-    final _logStream = ref.watch(deviceLogsProvider(device));
     return Container(
       width: 10,
       height: 10,

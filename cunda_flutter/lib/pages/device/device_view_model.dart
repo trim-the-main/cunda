@@ -4,6 +4,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1/endpoints.dart';
 import 'package:cunda_flutter/providers/rpc/protocol.dart';
 import 'package:cunda_flutter/utils/riverpod_utils.dart';
@@ -16,13 +17,12 @@ part "device_view_model.g.dart";
 final _log = Logger('DeviceViewModel');
 
 @Riverpod(keepAlive: true, retry: noRetry)
-Future<String> firmwareVersion(Ref ref, BluetoothDevice device) async {
+Future<DeviceId> deviceId(Ref ref, BluetoothDevice device) async {
   final eDispatcher = await ref.watch(
     endpointDispatcherProvider(device).future,
   );
-  _log.fine("Calling getFirmware RPC endpoint");
-  final res = await eDispatcher.getDeviceId(req: NoArg());
-  return res.firmwareVersion;
+  _log.fine("Calling getDeviceId RPC endpoint");
+  return eDispatcher.getDeviceId(req: NoArg());
 }
 
 @riverpod

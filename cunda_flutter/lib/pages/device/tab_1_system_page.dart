@@ -500,9 +500,9 @@ class StatusTableWidget extends StatelessWidget {
       "Firmware Version",
       Consumer(
         builder: (context, ref, child) => ref
-            .watch(firmwareVersionProvider(device))
+            .watch(deviceIdProvider(device))
             .when(
-              data: (version) => Text(version),
+              data: (deviceId) => Text(deviceId.firmwareVersion),
               error: (error, stackTrace) => Text("Error"),
               loading: () => LinearProgressIndicator(),
             ),

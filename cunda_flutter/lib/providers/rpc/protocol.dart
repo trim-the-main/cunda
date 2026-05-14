@@ -121,7 +121,7 @@ Future<int> getMtuFromDevice(Ref ref, BluetoothDevice device) async {
 
 // defmt logs coming through a topic
 @Riverpod(keepAlive: true, retry: noRetry)
-Stream<(DateTime, Uint8List)> deviceLogs(
+Stream<Uint8List> deviceLogs(
   Ref ref,
   BluetoothDevice device,
 ) async* {
@@ -138,10 +138,10 @@ Stream<(DateTime, Uint8List)> deviceLogs(
   });
   ref.onResume(() {
     _log.warning("Resume sys logs stream");
-    eDispatcher.startButtonEventsTopic(req: NoArg());
+    eDispatcher.startSysLogsTopic(req: NoArg());
   });
   await for (final logMsg in logStream) {
-    yield (DateTime.now(), logMsg.defmtBytes);
+    yield logMsg.defmtBytes;
     _log.info("[DEVICE LOG] ${logMsg.defmtBytes}");
   }
 }
