@@ -253,12 +253,12 @@ class PackageRegistryImpl extends PackageRegistry {
   File? componentPath(
     String deviceType,
     String firmwareVersion,
-    String componentKey,
+    ComponentType componentType,
   ) {
     final manifest = find(deviceType, firmwareVersion);
     if (manifest == null) return null;
 
-    final component = manifest.components[componentKey];
+    final component = manifest.components[componentType];
     if (component == null) return null;
 
     final dirName = _dirName(deviceType, firmwareVersion);

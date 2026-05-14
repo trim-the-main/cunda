@@ -2,6 +2,7 @@ import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/defmt_log_tra
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc/client.dart';
 import 'package:cunda_flutter/pages/device/device_view_model.dart';
 import 'package:cunda_flutter/providers/package_registry_provider.dart';
+import 'package:cunda_flutter/services/mayna/mayna_types.dart';
 import 'package:cunda_flutter/providers/rpc/client.dart';
 import 'package:cunda_flutter/providers/rpc/protocol.dart';
 import 'package:flutter/material.dart';
@@ -47,17 +48,19 @@ class _LogsPageState extends ConsumerState<LogsPage> {
     final tableFile = registry.componentPath(
       deviceId.deviceType,
       deviceId.firmwareVersion,
-      'defmt_table',
+      ComponentType.defmtTable,
     );
     final locFile = registry.componentPath(
       deviceId.deviceType,
       deviceId.firmwareVersion,
-      'defmt_locations',
+      ComponentType.defmtLocations,
     );
 
     if (tableFile == null) {
-      _log.info('No defmt table available for '
-          '${deviceId.deviceType}/${deviceId.firmwareVersion}');
+      _log.info(
+        'No defmt table available for '
+        '${deviceId.deviceType}/${deviceId.firmwareVersion}',
+      );
       if (mounted) setState(() => _decoderAvailable = false);
       return;
     }
@@ -78,7 +81,10 @@ class _LogsPageState extends ConsumerState<LogsPage> {
   }
 
   void _startListening() {
-    _logSubscription = ref.listenManual(deviceLogsProvider(widget.device), (previous, next) {
+    _logSubscription = ref.listenManual(deviceLogsProvider(widget.device), (
+      previous,
+      next,
+    ) {
       next.whenData((bytes) {
         if (_client == null) return;
         try {

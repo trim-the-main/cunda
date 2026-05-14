@@ -1,3 +1,36 @@
+import 'package:logging/logging.dart';
+
+final _log = Logger('MaynaTypes');
+
+/// Known component keys within a .mayna archive.
+enum ComponentType {
+  firmware,
+  defmtTable,
+  defmtLocations,
+  partitionTable,
+  changelog,
+  bootloader;
+
+  static ComponentType? fromJson(String key) => switch (key) {
+    'firmware' => firmware,
+    'defmt_table' => defmtTable,
+    'defmt_locations' => defmtLocations,
+    'partition_table' => partitionTable,
+    'changelog' => changelog,
+    'bootloader' => bootloader,
+    _ => null,
+  };
+
+  String toJsonKey() => switch (this) {
+    firmware => 'firmware',
+    defmtTable => 'defmt_table',
+    defmtLocations => 'defmt_locations',
+    partitionTable => 'partition_table',
+    changelog => 'changelog',
+    bootloader => 'bootloader',
+  };
+}
+
 /// A single component (file) within a .mayna archive.
 class MaynaComponent {
   final String file;
@@ -19,10 +52,10 @@ class MaynaComponent {
   }
 
   Map<String, dynamic> toJson() => {
-        'file': file,
-        'size': size,
-        'sha256': sha256,
-      };
+    'file': file,
+    'size': size,
+    'sha256': sha256,
+  };
 }
 
 /// The manifest.json inside a .mayna archive.
@@ -33,7 +66,7 @@ class MaynaPackageManifest {
   final int protocolVersion;
   final String minFirmwareVersion;
   final String publishDate;
-  final Map<String, MaynaComponent> components;
+  final Map<ComponentType, MaynaComponent> components;
 
   const MaynaPackageManifest({
     required this.formatVersion,
@@ -47,10 +80,17 @@ class MaynaPackageManifest {
 
   factory MaynaPackageManifest.fromJson(Map<String, dynamic> json) {
     final componentsJson = json['components'] as Map<String, dynamic>;
-    final components = componentsJson.map(
-      (key, value) =>
-          MapEntry(key, MaynaComponent.fromJson(value as Map<String, dynamic>)),
-    );
+    final components = <ComponentType, MaynaComponent>{};
+    for (final entry in componentsJson.entries) {
+      final key = ComponentType.fromJson(entry.key);
+      if (key == null) {
+        _log.warning('Unknown component key: ${entry.key}');
+        continue;
+      }
+      components[key] = MaynaComponent.fromJson(
+        entry.value as Map<String, dynamic>,
+      );
+    }
     return MaynaPackageManifest(
       formatVersion: json['format_version'] as int,
       deviceType: json['device_type'] as String,
@@ -63,15 +103,16 @@ class MaynaPackageManifest {
   }
 
   Map<String, dynamic> toJson() => {
-        'format_version': formatVersion,
-        'device_type': deviceType,
-        'firmware_version': firmwareVersion,
-        'protocol_version': protocolVersion,
-        'min_firmware_version': minFirmwareVersion,
-        'publish_date': publishDate,
-        'components':
-            components.map((key, value) => MapEntry(key, value.toJson())),
-      };
+    'format_version': formatVersion,
+    'device_type': deviceType,
+    'firmware_version': firmwareVersion,
+    'protocol_version': protocolVersion,
+    'min_firmware_version': minFirmwareVersion,
+    'publish_date': publishDate,
+    'components': components.map(
+      (key, value) => MapEntry(key.toJsonKey(), value.toJson()),
+    ),
+  };
 }
 
 /// Entry from the remote manifest (not yet downloaded).
@@ -161,9 +202,9 @@ class KnownDevice {
       this.deviceType == deviceType && this.serialNumber == serialNumber;
 
   Map<String, dynamic> toJson() => {
-        'serial_number': serialNumber,
-        'device_type': deviceType,
-        'firmware_version': firmwareVersion,
-        'last_seen': lastSeen.toIso8601String(),
-      };
+    'serial_number': serialNumber,
+    'device_type': deviceType,
+    'firmware_version': firmwareVersion,
+    'last_seen': lastSeen.toIso8601String(),
+  };
 }

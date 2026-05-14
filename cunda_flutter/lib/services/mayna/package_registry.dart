@@ -65,7 +65,7 @@ abstract class PackageRegistry {
   File? componentPath(
     String deviceType,
     String firmwareVersion,
-    String componentKey,
+    ComponentType componentType,
   );
 
   /// Identify packages that can be safely removed.

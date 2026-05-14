@@ -8,6 +8,7 @@ import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/p
 import 'package:cunda_flutter/pages/device/device_view_model.dart';
 import 'package:cunda_flutter/providers/package_registry_provider.dart';
 import 'package:cunda_flutter/providers/rpc/protocol.dart';
+import 'package:cunda_flutter/services/mayna/mayna_types.dart';
 import 'package:cunda_flutter/services/mayna/package_registry.dart';
 import 'package:cunda_flutter/services/mayna/version.dart';
 import 'package:file_picker/file_picker.dart';
@@ -237,7 +238,7 @@ class _OtaSectionState extends ConsumerState<OtaSection> {
     final firmwareBinary = registry.componentPath(
       candidate.deviceType,
       candidate.firmwareVersion,
-      'firmware',
+      ComponentType.firmware,
     );
 
     if (firmwareBinary == null) {

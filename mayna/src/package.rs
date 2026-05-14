@@ -9,7 +9,7 @@ use zip::write::SimpleFileOptions;
 
 use crate::elf::{self, Chip, ElfData};
 use crate::error::{Error, Result};
-use crate::manifest::{Component, FirmwareInfo, PackageManifest};
+use crate::manifest::{Component, ComponentType, FirmwareInfo, PackageManifest};
 use crate::verify;
 
 const MANIFEST_FILENAME: &str = "manifest.json";
@@ -29,7 +29,7 @@ pub struct CreateConfig {
 
 /// A named blob of bytes to include in the archive.
 struct ArchiveEntry {
-    key: String,
+    key: ComponentType,
     file_name: String,
     data: Vec<u8>,
 }
@@ -67,17 +67,17 @@ fn collect_entries(config: &CreateConfig, elf_data: &ElfData) -> Result<Vec<Arch
 
     let mut entries = vec![
         ArchiveEntry {
-            key: "firmware".to_string(),
+            key: ComponentType::Firmware,
             file_name: "firmware.bin".to_string(),
             data: firmware_data,
         },
         ArchiveEntry {
-            key: "defmt_table".to_string(),
+            key: ComponentType::DefmtTable,
             file_name: "defmt_table.bin".to_string(),
             data: elf_data.serialize_defmt_table()?,
         },
         ArchiveEntry {
-            key: "defmt_locations".to_string(),
+            key: ComponentType::DefmtLocations,
             file_name: "defmt_locations.bin".to_string(),
             data: elf_data.serialize_defmt_locations()?,
         },
@@ -85,7 +85,7 @@ fn collect_entries(config: &CreateConfig, elf_data: &ElfData) -> Result<Vec<Arch
 
     if let Some(ref src) = config.partition_table_path {
         entries.push(ArchiveEntry {
-            key: "partition_table".to_string(),
+            key: ComponentType::PartitionTable,
             file_name: "partition_table.bin".to_string(),
             data: fs::read(src).map_err(|source| Error::Io {
                 path: src.clone(),
@@ -96,7 +96,7 @@ fn collect_entries(config: &CreateConfig, elf_data: &ElfData) -> Result<Vec<Arch
 
     if let Some(ref src) = config.changelog_path {
         entries.push(ArchiveEntry {
-            key: "changelog".to_string(),
+            key: ComponentType::Changelog,
             file_name: "changelog.txt".to_string(),
             data: fs::read(src).map_err(|source| Error::Io {
                 path: src.clone(),
@@ -107,7 +107,7 @@ fn collect_entries(config: &CreateConfig, elf_data: &ElfData) -> Result<Vec<Arch
 
     if let Some(ref src) = config.bootloader_path {
         entries.push(ArchiveEntry {
-            key: "bootloader".to_string(),
+            key: ComponentType::Bootloader,
             file_name: "bootloader.bin".to_string(),
             data: fs::read(src).map_err(|source| Error::Io {
                 path: src.clone(),
@@ -128,7 +128,7 @@ fn build_manifest(
 ) -> PackageManifest {
     let mut components = BTreeMap::new();
     for entry in entries {
-        components.insert(entry.key.clone(), entry.component());
+        components.insert(entry.key, entry.component());
     }
 
     let publish_date =

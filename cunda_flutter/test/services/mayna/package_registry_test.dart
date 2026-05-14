@@ -41,8 +41,12 @@ void main() {
     });
 
     test('find returns the correct package', () async {
-      await importTestPackage(registry, tempDir,
-          deviceType: 'cunda', firmwareVersion: '1.0.0');
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'cunda',
+        firmwareVersion: '1.0.0',
+      );
 
       expect(registry.find('cunda', '1.0.0'), isNotNull);
       expect(registry.find('cunda', '2.0.0'), isNull);
@@ -50,12 +54,24 @@ void main() {
     });
 
     test('listByDeviceType filters correctly', () async {
-      await importTestPackage(registry, tempDir,
-          deviceType: 'cunda', firmwareVersion: '1.0.0');
-      await importTestPackage(registry, tempDir,
-          deviceType: 'cunda', firmwareVersion: '2.0.0');
-      await importTestPackage(registry, tempDir,
-          deviceType: 'other', firmwareVersion: '1.0.0');
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'cunda',
+        firmwareVersion: '1.0.0',
+      );
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'cunda',
+        firmwareVersion: '2.0.0',
+      );
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'other',
+        firmwareVersion: '1.0.0',
+      );
 
       expect(registry.listByDeviceType('cunda'), hasLength(2));
       expect(registry.listByDeviceType('other'), hasLength(1));
@@ -63,8 +79,12 @@ void main() {
     });
 
     test('remove deletes a package', () async {
-      await importTestPackage(registry, tempDir,
-          deviceType: 'cunda', firmwareVersion: '1.0.0');
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'cunda',
+        firmwareVersion: '1.0.0',
+      );
       expect(registry.listAll(), hasLength(1));
 
       await registry.remove('cunda', '1.0.0');
@@ -73,35 +93,81 @@ void main() {
     });
 
     test('componentPath returns correct path for installed package', () async {
-      await importTestPackage(registry, tempDir,
-          deviceType: 'cunda', firmwareVersion: '1.0.0');
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'cunda',
+        firmwareVersion: '1.0.0',
+      );
 
-      final path = registry.componentPath('cunda', '1.0.0', 'firmware');
+      final path = registry.componentPath(
+        'cunda',
+        '1.0.0',
+        ComponentType.firmware,
+      );
       expect(path, isNotNull);
       expect(path!.existsSync(), isTrue);
     });
 
     test('componentPath returns null for missing package', () {
-      expect(registry.componentPath('cunda', '1.0.0', 'firmware'), isNull);
+      expect(
+        registry.componentPath('cunda', '1.0.0', ComponentType.firmware),
+        isNull,
+      );
     });
 
-    test('componentPath returns null for missing component', () async {
-      await importTestPackage(registry, tempDir,
-          deviceType: 'cunda', firmwareVersion: '1.0.0');
+    test('componentPath returns null for component not in package', () async {
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'cunda',
+        firmwareVersion: '1.0.0',
+      );
 
+      // Test package only includes 'firmware', not 'defmt_table'
       expect(
-          registry.componentPath('cunda', '1.0.0', 'nonexistent'), isNull);
+        registry.componentPath('cunda', '1.0.0', ComponentType.defmtTable),
+        isNull,
+      );
+    });
+
+    test('unknown component keys in JSON are silently dropped', () async {
+      // Create a manifest with an unknown component key
+      final manifest = MaynaPackageManifest.fromJson({
+        'format_version': 1,
+        'device_type': 'cunda',
+        'firmware_version': '1.0.0',
+        'protocol_version': 1,
+        'min_firmware_version': '0.0.0',
+        'publish_date': '2026-01-01',
+        'components': {
+          'firmware': {'file': 'firmware.bin', 'size': 100, 'sha256': 'abc'},
+          'future_component': {
+            'file': 'future.bin',
+            'size': 50,
+            'sha256': 'def',
+          },
+        },
+      });
+      expect(manifest.components.length, 1);
+      expect(manifest.components.containsKey(ComponentType.firmware), isTrue);
     });
 
     test('findLatestCompatible respects protocol version', () async {
-      await importTestPackage(registry, tempDir,
-          deviceType: 'cunda',
-          firmwareVersion: '1.0.0',
-          protocolVersion: 1);
-      await importTestPackage(registry, tempDir,
-          deviceType: 'cunda',
-          firmwareVersion: '2.0.0',
-          protocolVersion: 2);
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'cunda',
+        firmwareVersion: '1.0.0',
+        protocolVersion: 1,
+      );
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'cunda',
+        firmwareVersion: '2.0.0',
+        protocolVersion: 2,
+      );
 
       final result = registry.findLatestCompatible(
         deviceType: 'cunda',
@@ -113,16 +179,22 @@ void main() {
     });
 
     test('findLatestCompatible respects minFirmwareVersion', () async {
-      await importTestPackage(registry, tempDir,
-          deviceType: 'cunda',
-          firmwareVersion: '1.0.0',
-          protocolVersion: 1,
-          minFirmwareVersion: '0.0.0');
-      await importTestPackage(registry, tempDir,
-          deviceType: 'cunda',
-          firmwareVersion: '2.0.0',
-          protocolVersion: 1,
-          minFirmwareVersion: '1.5.0');
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'cunda',
+        firmwareVersion: '1.0.0',
+        protocolVersion: 1,
+        minFirmwareVersion: '0.0.0',
+      );
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'cunda',
+        firmwareVersion: '2.0.0',
+        protocolVersion: 1,
+        minFirmwareVersion: '1.5.0',
+      );
 
       // Current version 1.0.0 < minFirmwareVersion 1.5.0, so 2.0.0 is excluded
       final result = registry.findLatestCompatible(
@@ -135,10 +207,13 @@ void main() {
     });
 
     test('findLatestCompatible returns null when nothing matches', () async {
-      await importTestPackage(registry, tempDir,
-          deviceType: 'cunda',
-          firmwareVersion: '1.0.0',
-          protocolVersion: 2);
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'cunda',
+        firmwareVersion: '1.0.0',
+        protocolVersion: 2,
+      );
 
       final result = registry.findLatestCompatible(
         deviceType: 'cunda',
@@ -149,18 +224,27 @@ void main() {
     });
 
     test('findCleanablePackages identifies removable packages', () async {
-      await importTestPackage(registry, tempDir,
-          deviceType: 'cunda',
-          firmwareVersion: '1.0.0',
-          protocolVersion: 1);
-      await importTestPackage(registry, tempDir,
-          deviceType: 'cunda',
-          firmwareVersion: '2.0.0',
-          protocolVersion: 1);
-      await importTestPackage(registry, tempDir,
-          deviceType: 'cunda',
-          firmwareVersion: '3.0.0',
-          protocolVersion: 1);
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'cunda',
+        firmwareVersion: '1.0.0',
+        protocolVersion: 1,
+      );
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'cunda',
+        firmwareVersion: '2.0.0',
+        protocolVersion: 1,
+      );
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'cunda',
+        firmwareVersion: '3.0.0',
+        protocolVersion: 1,
+      );
 
       // Device running 2.0.0; latest compatible is 3.0.0; 1.0.0 is cleanable
       final knownDevices = [
@@ -178,14 +262,20 @@ void main() {
     });
 
     test('cleanup removes cleanable packages', () async {
-      await importTestPackage(registry, tempDir,
-          deviceType: 'cunda',
-          firmwareVersion: '1.0.0',
-          protocolVersion: 1);
-      await importTestPackage(registry, tempDir,
-          deviceType: 'cunda',
-          firmwareVersion: '2.0.0',
-          protocolVersion: 1);
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'cunda',
+        firmwareVersion: '1.0.0',
+        protocolVersion: 1,
+      );
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'cunda',
+        firmwareVersion: '2.0.0',
+        protocolVersion: 1,
+      );
 
       final knownDevices = <KnownDevice>[];
       // No known devices — only the latest per device type is retained
@@ -208,10 +298,18 @@ void main() {
     });
 
     test('import overwrites existing package of same version', () async {
-      await importTestPackage(registry, tempDir,
-          deviceType: 'cunda', firmwareVersion: '1.0.0');
-      await importTestPackage(registry, tempDir,
-          deviceType: 'cunda', firmwareVersion: '1.0.0');
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'cunda',
+        firmwareVersion: '1.0.0',
+      );
+      await importTestPackage(
+        registry,
+        tempDir,
+        deviceType: 'cunda',
+        firmwareVersion: '1.0.0',
+      );
 
       expect(registry.listAll(), hasLength(1));
     });
