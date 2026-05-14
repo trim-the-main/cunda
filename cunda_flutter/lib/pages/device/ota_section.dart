@@ -230,8 +230,7 @@ class _OtaSectionState extends ConsumerState<OtaSection> {
     );
 
     if (candidate == null ||
-        compareVersions(candidate.firmwareVersion, deviceId.firmwareVersion) <=
-            0) {
+        !isValidUpdate(deviceId.firmwareVersion, candidate.firmwareVersion)) {
       return Text("No update available");
     }
 
