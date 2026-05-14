@@ -72,6 +72,18 @@ size-futures filter='':
       | sort -t: -k2 -rn
 
 # ==============================================================================
+# Packaging
+# ==============================================================================
+
+# Build a .mayna distribution package from the release firmware ELF
+package-firmware: build-firmware-release
+    cargo run --manifest-path mayna/Cargo.toml -- create \
+      --elf {{elf}} \
+      --chip esp32 \
+      --bootloader firmware/bootloader_with_ota/bootloader.bin \
+      --output .
+
+# ==============================================================================
 # Flutter
 # ==============================================================================
 
