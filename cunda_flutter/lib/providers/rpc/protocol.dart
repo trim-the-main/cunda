@@ -15,6 +15,15 @@ part 'protocol.g.dart';
 final _log = Logger('ProtocolProvider');
 
 @Riverpod(keepAlive: true, retry: noRetry)
+FutureOr<LogDecoder> logDecoder(
+  Ref ref,
+  BluetoothDevice device,
+) async {
+  final client = await ref.watch(rpcClientProvider(device).future);
+  return client as LogDecoder;
+}
+
+@Riverpod(keepAlive: true, retry: noRetry)
 FutureOr<EndpointDispatcher> endpointDispatcher(
   Ref ref,
   BluetoothDevice device,

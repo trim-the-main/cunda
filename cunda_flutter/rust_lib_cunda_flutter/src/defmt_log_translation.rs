@@ -53,8 +53,10 @@ impl LogDecoderDefmt {
         Ok(Self { table, locations })
     }
 
-    #[flutter_rust_bridge::frb(sync)]
-    pub fn defmt_decode(&self, bytes: &[u8]) -> Result<Vec<DefmtLogEntry>, LogDecodingError> {
+    pub(crate) fn defmt_decode(
+        &self,
+        bytes: &[u8],
+    ) -> Result<Vec<DefmtLogEntry>, LogDecodingError> {
         let mut stream_decoder = self.table.new_stream_decoder();
         stream_decoder.received(bytes);
         let mut ret = Vec::new();

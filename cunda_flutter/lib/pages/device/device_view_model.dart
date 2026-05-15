@@ -3,10 +3,13 @@
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1/endpoints.dart';
+import 'package:cunda_flutter/providers/package_registry_provider.dart';
 import 'package:cunda_flutter/providers/rpc/protocol.dart';
+import 'package:cunda_flutter/services/mayna/mayna_types.dart';
 import 'package:cunda_flutter/utils/riverpod_utils.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:logging/logging.dart';
@@ -23,6 +26,42 @@ Future<DeviceId> deviceId(Ref ref, BluetoothDevice device) async {
   );
   _log.fine("Calling getDeviceId RPC endpoint");
   return eDispatcher.getDeviceId(req: NoArg());
+}
+
+@Riverpod(keepAlive: true, retry: noRetry)
+Future<LogDecoder?> initializedLogDecoder(
+  Ref ref,
+  BluetoothDevice device,
+) async {
+  final deviceId = await ref.watch(deviceIdProvider(device).future);
+  final registry = await ref.watch(packageRegistryProvider.future);
+
+  final tableFile = registry.componentPath(
+    deviceId.deviceType,
+    deviceId.firmwareVersion,
+    ComponentType.defmtTable,
+  );
+  if (tableFile == null) {
+    _log.info(
+      'No defmt table available for '
+      '${deviceId.deviceType}/${deviceId.firmwareVersion}',
+    );
+    return null;
+  }
+
+  final locFile = registry.componentPath(
+    deviceId.deviceType,
+    deviceId.firmwareVersion,
+    ComponentType.defmtLocations,
+  );
+
+  final decoder = await ref.watch(logDecoderProvider(device).future);
+  await decoder.initLogDecoder(
+    tableBytes: await tableFile.readAsBytes(),
+    locBytes: locFile != null ? await locFile.readAsBytes() : [],
+  );
+  _log.info('Log decoder initialized');
+  return decoder;
 }
 
 @riverpod

@@ -16,6 +16,7 @@ use serde::de::DeserializeOwned;
 use tokio::sync::Mutex;
 
 use crate::{
+    defmt_log_translation::{DefmtLogEntry, LogDecodingError},
     frb_generated::{self, StreamSink},
     rpc::TopicDispatcher,
 };
@@ -327,5 +328,16 @@ impl TopicDispatcher for DummyFlutterProtocolClient {
         self.topic_join_handles.lock().await.push(handle);
 
         Ok(())
+    }
+}
+
+impl crate::rpc::LogDecoder for DummyFlutterProtocolClient {
+    fn init_log_decoder(&mut self, _table_bytes: &[u8], _loc_bytes: &[u8]) {
+        log::info!("Dummy client: init_log_decoder (no-op)");
+    }
+
+    #[flutter_rust_bridge::frb(sync)]
+    fn decode_log(&self, _bytes: &[u8]) -> Result<Vec<DefmtLogEntry>, LogDecodingError> {
+        Err(LogDecodingError::NoTableData)
     }
 }
