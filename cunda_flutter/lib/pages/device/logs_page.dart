@@ -1,10 +1,16 @@
 import 'dart:collection';
+import 'dart:io';
 
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/defmt_log_translation.dart';
+import 'package:cunda_flutter/providers/package_registry_provider.dart';
 import 'package:cunda_flutter/providers/rpc/device_logs.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:logging/logging.dart';
+
+final _log = Logger('LogsPage');
 
 class LogsPage extends StatelessWidget {
   final BluetoothDevice device;
@@ -53,11 +59,43 @@ class _LogListView extends ConsumerStatefulWidget {
 
 class _LogListViewState extends ConsumerState<_LogListView> {
   final ScrollController _scrollController = ScrollController();
+  bool _importing = false;
 
   @override
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _importPackage() async {
+    final result = await FilePicker.platform.pickFiles();
+    if (result == null) return;
+
+    setState(() => _importing = true);
+
+    try {
+      final registry = await ref.read(packageRegistryProvider.future);
+      final manifest = await registry.import(File(result.files.single.path!));
+      ref.invalidate(initializedLogDecoderProvider(widget.device));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Imported ${manifest.deviceType} v${manifest.firmwareVersion}',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      _log.warning('Failed to import .mayna package: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Import failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _importing = false);
+    }
   }
 
   void _scrollToBottom() {
@@ -79,8 +117,31 @@ class _LogListViewState extends ConsumerState<_LogListView> {
 
   @override
   Widget build(BuildContext context) {
-    final Queue<DefmtLogEntry> logs =
-        ref.watch(decodedDeviceLogsProvider(widget.device));
+    final Queue<DefmtLogEntry>? logs = ref.watch(
+      decodedDeviceLogsProvider(widget.device),
+    );
+
+    if (logs == null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Firmware version not recognized'),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _importing ? null : _importPackage,
+              child: _importing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Import .mayna Package'),
+            ),
+          ],
+        ),
+      );
+    }
 
     _scrollToBottom();
 

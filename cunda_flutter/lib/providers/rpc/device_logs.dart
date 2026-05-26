@@ -105,9 +105,9 @@ class DecodedDeviceLogs extends _$DecodedDeviceLogs {
   final Queue<DefmtLogEntry> _queue = Queue();
 
   @override
-  Queue<DefmtLogEntry> build(BluetoothDevice device) {
+  Queue<DefmtLogEntry>? build(BluetoothDevice device) {
     final decoder = ref.watch(initializedLogDecoderProvider(device)).value;
-    if (decoder == null) return _queue;
+    if (decoder == null) return null;
 
     ref.listen(deviceLogsProvider(device), (_, next) {
       final bytes = next.value;

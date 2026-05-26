@@ -5,7 +5,6 @@ import 'package:crypto/crypto.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/lib.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1/endpoints.dart';
-import 'package:cunda_flutter/pages/device/device_view_model.dart';
 import 'package:cunda_flutter/providers/package_registry_provider.dart';
 import 'package:cunda_flutter/providers/rpc/protocol.dart';
 import 'package:cunda_flutter/services/mayna/mayna_types.dart';
