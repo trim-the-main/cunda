@@ -28,27 +28,7 @@ esp_bootloader_esp_idf::esp_app_desc!();
 
 #[embassy_executor::task]
 async fn second_cpu_main() {
-    // This is a 5 second busy loop followed by a 5 second sleep
-
-    use core::sync::atomic::{AtomicU32, Ordering};
-    let value = AtomicU32::new(0);
-    loop {
-        defmt::info!("Doing some long and complicated calculation");
-        let start = embassy_time::Instant::now();
-
-        // The busy loop with just empty loop body hits a bug:
-        // https://github.com/esp-rs/esp-hal/issues/4903
-        // It causes the loop to terminate early. It is not super
-        // crucial here but spacing out the Instant::now calls in
-        // start.elapsed() helps keeping the CPU spinning longer
-        while start.elapsed() < Duration::from_secs(5) {
-            for _ in 0..(1024 * 128) {
-                value.fetch_add(1, Ordering::SeqCst);
-            }
-        }
-        defmt::info!("Calculation finished");
-        Timer::after(Duration::from_secs(5)).await;
-    }
+    return;
 }
 
 #[allow(
