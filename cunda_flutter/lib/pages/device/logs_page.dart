@@ -1,54 +1,63 @@
+import 'dart:collection';
+
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/defmt_log_translation.dart';
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc.dart';
-import 'package:cunda_flutter/pages/device/device_view_model.dart';
-import 'package:cunda_flutter/providers/rpc/protocol.dart';
+import 'package:cunda_flutter/providers/rpc/device_logs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:logging/logging.dart';
 
-final _log = Logger('LogsPage');
-
-class LogsPage extends ConsumerStatefulWidget {
+class LogsPage extends StatelessWidget {
   final BluetoothDevice device;
 
   const LogsPage({super.key, required this.device});
 
   @override
-  ConsumerState<LogsPage> createState() => _LogsPageState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Device Logs')),
+      body: Column(
+        children: [
+          _LogTopicSwitch(device: device),
+          Expanded(child: _LogListView(device: device)),
+        ],
+      ),
+    );
+  }
 }
 
-class _LogsPageState extends ConsumerState<LogsPage> {
-  final List<String> _logLines = [];
+class _LogTopicSwitch extends ConsumerWidget {
+  final BluetoothDevice device;
+
+  const _LogTopicSwitch({required this.device});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final keepRunning = ref.watch(logTopicEnabledProvider(device));
+    return SwitchListTile(
+      title: const Text('Keep logs running in background'),
+      value: keepRunning,
+      onChanged: (_) =>
+          ref.read(logTopicEnabledProvider(device).notifier).toggle(),
+    );
+  }
+}
+
+class _LogListView extends ConsumerStatefulWidget {
+  final BluetoothDevice device;
+
+  const _LogListView({required this.device});
+
+  @override
+  ConsumerState<_LogListView> createState() => _LogListViewState();
+}
+
+class _LogListViewState extends ConsumerState<_LogListView> {
   final ScrollController _scrollController = ScrollController();
-  ProviderSubscription? _logSubscription;
 
   @override
   void dispose() {
-    _logSubscription?.close();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  void _startListening(LogDecoder decoder) {
-    _logSubscription = ref.listenManual(deviceLogsProvider(widget.device), (
-      previous,
-      next,
-    ) {
-      next.whenData((bytes) {
-        try {
-          final entries = decoder.decodeLog(bytes: bytes);
-          setState(() {
-            for (final entry in entries) {
-              _logLines.add(_formatEntry(entry));
-            }
-          });
-          _scrollToBottom();
-        } catch (e) {
-          _log.warning('Failed to decode log: $e');
-        }
-      });
-    });
   }
 
   void _scrollToBottom() {
@@ -70,43 +79,20 @@ class _LogsPageState extends ConsumerState<LogsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final decoderAsync = ref.watch(
-      initializedLogDecoderProvider(widget.device),
-    );
+    final Queue<DefmtLogEntry> logs =
+        ref.watch(decodedDeviceLogsProvider(widget.device));
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Device Logs')),
-      body: decoderAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, st) => Center(child: Text('Error: $e')),
-        data: (decoder) {
-          if (decoder == null) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'Install a .mayna package for this firmware version '
-                  'to view decoded logs.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            );
-          }
-          if (_logSubscription == null) {
-            _startListening(decoder);
-          }
-          return ListView.builder(
-            controller: _scrollController,
-            itemCount: _logLines.length,
-            itemBuilder: (context, index) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-              child: Text(
-                _logLines[index],
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-              ),
-            ),
-          );
-        },
+    _scrollToBottom();
+
+    return ListView.builder(
+      controller: _scrollController,
+      itemCount: logs.length,
+      itemBuilder: (context, index) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+        child: Text(
+          _formatEntry(logs.elementAt(index)),
+          style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+        ),
       ),
     );
   }

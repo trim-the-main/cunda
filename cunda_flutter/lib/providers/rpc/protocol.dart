@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1/endpoints.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1/topics.dart';
 import 'package:cunda_flutter/providers/rpc/client.dart';
@@ -13,15 +13,6 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'protocol.g.dart';
 
 final _log = Logger('ProtocolProvider');
-
-@Riverpod(keepAlive: true, retry: noRetry)
-FutureOr<LogDecoder> logDecoder(
-  Ref ref,
-  BluetoothDevice device,
-) async {
-  final client = await ref.watch(rpcClientProvider(device).future);
-  return client as LogDecoder;
-}
 
 @Riverpod(keepAlive: true, retry: noRetry)
 FutureOr<EndpointDispatcher> endpointDispatcher(
@@ -128,29 +119,11 @@ Future<int> getMtuFromDevice(Ref ref, BluetoothDevice device) async {
   return await eDispatcher.getMtu(req: NoArg());
 }
 
-// defmt logs coming through a topic
 @Riverpod(keepAlive: true, retry: noRetry)
-Stream<Uint8List> deviceLogs(
-  Ref ref,
-  BluetoothDevice device,
-) async* {
+Future<DeviceId> deviceId(Ref ref, BluetoothDevice device) async {
   final eDispatcher = await ref.watch(
     endpointDispatcherProvider(device).future,
   );
-  final tDispatcher = await ref.watch(topicDispatcherProvider(device).future);
-  final logStream = tDispatcher.createSysLogsTopicStream();
-
-  eDispatcher.startSysLogsTopic(req: NoArg());
-  ref.onCancel(() {
-    _log.warning("Stop sys logs stream, we got canceled");
-    eDispatcher.stopSysLogsTopic(req: NoArg());
-  });
-  ref.onResume(() {
-    _log.warning("Resume sys logs stream");
-    eDispatcher.startSysLogsTopic(req: NoArg());
-  });
-  await for (final logMsg in logStream) {
-    yield logMsg.defmtBytes;
-    _log.info("[DEVICE LOG] ${logMsg.defmtBytes}");
-  }
+  _log.fine("Calling getDeviceId RPC endpoint");
+  return eDispatcher.getDeviceId(req: NoArg());
 }

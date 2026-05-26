@@ -3,7 +3,10 @@
 use std::{
     collections::HashMap,
     str::FromStr,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{
+        atomic::{AtomicBool, AtomicU32},
+        Arc,
+    },
 };
 
 use frb_prpc_juggle::client_interface::{
@@ -27,6 +30,8 @@ pub struct DummyFlutterProtocolClient {
     current_application_settings: Mutex<ApplSettings>,
     streams_running_status: Mutex<HashMap<Key, Arc<AtomicBool>>>,
     topic_join_handles: Mutex<Vec<flutter_rust_bridge::JoinHandle<()>>>,
+    log_decoder_initialized: AtomicBool,
+    log_counter: AtomicU32,
 }
 
 impl DummyFlutterProtocolClient {
@@ -43,6 +48,8 @@ impl DummyFlutterProtocolClient {
             }),
             streams_running_status: Mutex::new(HashMap::new()),
             topic_join_handles: Mutex::new(Vec::new()),
+            log_decoder_initialized: AtomicBool::new(false),
+            log_counter: AtomicU32::new(0),
         }
     }
 
@@ -84,7 +91,7 @@ impl EndpointDispatcher for DummyFlutterProtocolClient {
     async fn get_device_id(&self, _req: NoArg) -> Result<DeviceId, FrbPostcardRpcError> {
         log::debug!("Get device id called");
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-        Ok(DeviceId::default())
+        Ok(DeviceId::new("cunda", 1, 1, "0.0.0-fake_device", 1))
     }
 
     async fn get_sys_settings(&self, _req: NoArg) -> Result<SysSettings, FrbPostcardRpcError> {
@@ -177,6 +184,157 @@ impl EndpointDispatcher for DummyFlutterProtocolClient {
         }
         Ok(EmptyRes {})
     }
+
+    async fn start_button_events_topic(
+        &self,
+        _req: NoArg,
+    ) -> Result<EmptyRes, FrbPostcardRpcError> {
+        log::info!("Start button events topic called");
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        if let Some(running) = self
+            .streams_running_status
+            .lock()
+            .await
+            .get(&ButtonEvents::TOPIC_KEY)
+        {
+            running.store(true, std::sync::atomic::Ordering::Release);
+            Ok(EmptyRes {})
+        } else {
+            Err(FrbPostcardRpcError::InternalError)
+        }
+    }
+
+    async fn stop_button_events_topic(&self, _req: NoArg) -> Result<EmptyRes, FrbPostcardRpcError> {
+        log::debug!("Stop button events topic called");
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        if let Some(flag) = self
+            .streams_running_status
+            .lock()
+            .await
+            .get(&ButtonEvents::TOPIC_KEY)
+        {
+            flag.store(false, std::sync::atomic::Ordering::Release);
+            Ok(EmptyRes {})
+        } else {
+            Err(FrbPostcardRpcError::InternalError)
+        }
+    }
+
+    async fn start_sys_logs_topic(&self, _req: NoArg) -> Result<EmptyRes, FrbPostcardRpcError> {
+        log::debug!("Start sys logs topic called");
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        if let Some(running) = self
+            .streams_running_status
+            .lock()
+            .await
+            .get(&SysLogsTopic::TOPIC_KEY)
+        {
+            running.store(true, std::sync::atomic::Ordering::Release);
+            Ok(EmptyRes {})
+        } else {
+            Err(FrbPostcardRpcError::InternalError)
+        }
+    }
+
+    async fn stop_sys_logs_topic(&self, _req: NoArg) -> Result<EmptyRes, FrbPostcardRpcError> {
+        log::debug!("Stop sys logs topic called");
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        if let Some(flag) = self
+            .streams_running_status
+            .lock()
+            .await
+            .get(&SysLogsTopic::TOPIC_KEY)
+        {
+            flag.store(false, std::sync::atomic::Ordering::Release);
+            Ok(EmptyRes {})
+        } else {
+            Err(FrbPostcardRpcError::InternalError)
+        }
+    }
+
+    async fn start_test_topic_bandwidth(
+        &self,
+        _req: NoArg,
+    ) -> Result<EmptyRes, FrbPostcardRpcError> {
+        log::debug!("Start test topic bandwidth called");
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        if let Some(running) = self
+            .streams_running_status
+            .lock()
+            .await
+            .get(&BandwidthTestTopic::TOPIC_KEY)
+        {
+            running.store(true, std::sync::atomic::Ordering::Release);
+            Ok(EmptyRes {})
+        } else {
+            Err(FrbPostcardRpcError::InternalError)
+        }
+    }
+
+    async fn stop_test_topic_bandwidth(
+        &self,
+        _req: NoArg,
+    ) -> Result<EmptyRes, FrbPostcardRpcError> {
+        log::debug!("Stop test topic bandwidth called");
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        if let Some(flag) = self
+            .streams_running_status
+            .lock()
+            .await
+            .get(&BandwidthTestTopic::TOPIC_KEY)
+        {
+            flag.store(false, std::sync::atomic::Ordering::Release);
+            Ok(EmptyRes {})
+        } else {
+            Err(FrbPostcardRpcError::InternalError)
+        }
+    }
+
+    async fn get_mtu(&self, _req: NoArg) -> Result<u16, FrbPostcardRpcError> {
+        log::debug!("Get MTU called");
+        Ok(251)
+    }
+
+    async fn echo_endpoint(&self, req: EchoRequest) -> Result<EchoResponse, FrbPostcardRpcError> {
+        log::debug!("Echo endpoint called");
+        Ok(EchoResponse { inner: req.inner })
+    }
+
+    async fn test_bandwidth(
+        &self,
+        _req: BandwidthTestData,
+    ) -> Result<EmptyRes, FrbPostcardRpcError> {
+        log::debug!("Test bandwidth called");
+        Ok(EmptyRes {})
+    }
+
+    async fn prepare_ota(&self, _req: OtaMData) -> Result<OtaResult, FrbPostcardRpcError> {
+        log::debug!("Prepare OTA called");
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        Ok(OtaResult::TransferReady)
+    }
+
+    async fn transfer_ota_bytes(&self, _req: OtaBytes) -> Result<OtaResult, FrbPostcardRpcError> {
+        Ok(OtaResult::TransferReady)
+    }
+
+    async fn finalize_ota(&self, _req: NoArg) -> Result<OtaResult, FrbPostcardRpcError> {
+        log::debug!("Finalize OTA called");
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        Ok(OtaResult::TransferComplete)
+    }
+
+    async fn approve_firmware(&self, _req: NoArg) -> Result<OtaResult, FrbPostcardRpcError> {
+        log::debug!("Approve firmware called");
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        Ok(OtaResult::TransferReady)
+    }
+
+    async fn factory_reset(&self, _req: NoArg) -> Result<OtaResult, FrbPostcardRpcError> {
+        log::debug!("Factory reset called");
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        Ok(OtaResult::Restarting)
+    }
 }
 
 impl ClientTopicInterface for DummyFlutterProtocolClient {
@@ -240,10 +398,6 @@ impl TopicDispatcher for DummyFlutterProtocolClient {
         &self,
         sink: StreamSink<SysStats>,
     ) -> Result<(), FrbPostcardRpcError> {
-        let mut streams_running_status_guard = self.streams_running_status.lock().await;
-        if streams_running_status_guard.contains_key(&SysStatsTopic::TOPIC_KEY) {
-            return Err(FrbPostcardRpcError::AlreadySubscribedtoTopic);
-        }
         let sys_stream = PeriodicTopicOutput::<SysStats, _>::new(
             [
                 SysStats {
@@ -271,19 +425,15 @@ impl TopicDispatcher for DummyFlutterProtocolClient {
             ],
             core::time::Duration::from_secs(1),
         );
-        let keep_notifying = {
-            streams_running_status_guard
-                .insert(SysStatsTopic::TOPIC_KEY, Arc::new(AtomicBool::new(false)));
-            streams_running_status_guard
-                .get(&SysStatsTopic::TOPIC_KEY)
-                .unwrap()
-        };
+
+        let mut streams_running_status_guard = self.streams_running_status.lock().await;
+        let keep_notifying = streams_running_status_guard
+            .entry(SysStatsTopic::TOPIC_KEY)
+            .or_insert(Arc::new(AtomicBool::new(false)));
         let handle: flutter_rust_bridge::JoinHandle<()> = sys_stream
             .leak_into_sink(sink, keep_notifying.clone())
             .await;
-
-        let mut join_handles = self.topic_join_handles.lock().await;
-        join_handles.push(handle);
+        self.topic_join_handles.lock().await.push(handle);
 
         Ok(())
     }
@@ -314,17 +464,54 @@ impl TopicDispatcher for DummyFlutterProtocolClient {
         );
 
         let mut streams_running_status_guard = self.streams_running_status.lock().await;
-        let keep_notifying = {
-            streams_running_status_guard
-                .insert(ButtonEvents::TOPIC_KEY, Arc::new(AtomicBool::new(true))); //always on
-            streams_running_status_guard
-                .get(&ButtonEvents::TOPIC_KEY)
-                .unwrap()
-        };
-
+        let keep_notifying = streams_running_status_guard
+            .entry(ButtonEvents::TOPIC_KEY)
+            .or_insert(Arc::new(AtomicBool::new(true))); //always on
         let handle = button_stream
             .leak_into_sink(sink, keep_notifying.clone())
             .await;
+        self.topic_join_handles.lock().await.push(handle);
+
+        Ok(())
+    }
+
+    async fn create_sys_logs_topic_stream(
+        &self,
+        sink: StreamSink<LogMessage>,
+    ) -> Result<(), FrbPostcardRpcError> {
+        let log_stream = PeriodicTopicOutput::<LogMessage, _>::new(
+            [LogMessage {
+                defmt_bytes: vec![0u8; 8],
+            }],
+            core::time::Duration::from_secs(2),
+        );
+
+        let mut streams_running_status_guard = self.streams_running_status.lock().await;
+        let keep_notifying = streams_running_status_guard
+            .entry(SysLogsTopic::TOPIC_KEY)
+            .or_insert(Arc::new(AtomicBool::new(false)));
+        let handle = log_stream
+            .leak_into_sink(sink, keep_notifying.clone())
+            .await;
+        self.topic_join_handles.lock().await.push(handle);
+
+        Ok(())
+    }
+
+    async fn create_bandwidth_test_topic_stream(
+        &self,
+        sink: StreamSink<BandwidthTestTopicData>,
+    ) -> Result<(), FrbPostcardRpcError> {
+        let bw_stream = PeriodicTopicOutput::<BandwidthTestTopicData, _>::new(
+            [BandwidthTestTopicData::new(0)],
+            core::time::Duration::from_millis(100),
+        );
+
+        let mut streams_running_status_guard = self.streams_running_status.lock().await;
+        let keep_notifying = streams_running_status_guard
+            .entry(BandwidthTestTopic::TOPIC_KEY)
+            .or_insert(Arc::new(AtomicBool::new(false)));
+        let handle = bw_stream.leak_into_sink(sink, keep_notifying.clone()).await;
         self.topic_join_handles.lock().await.push(handle);
 
         Ok(())
@@ -333,11 +520,40 @@ impl TopicDispatcher for DummyFlutterProtocolClient {
 
 impl crate::rpc::LogDecoder for DummyFlutterProtocolClient {
     fn init_log_decoder(&mut self, _table_bytes: &[u8], _loc_bytes: &[u8]) {
-        log::info!("Dummy client: init_log_decoder (no-op)");
+        log::info!("Dummy client: log decoder initialized");
+        self.log_decoder_initialized
+            .store(true, std::sync::atomic::Ordering::Release);
     }
 
     #[flutter_rust_bridge::frb(sync)]
     fn decode_log(&self, _bytes: &[u8]) -> Result<Vec<DefmtLogEntry>, LogDecodingError> {
-        Err(LogDecodingError::NoTableData)
+        if !self
+            .log_decoder_initialized
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            return Err(LogDecodingError::NoTableData);
+        }
+        let count = self
+            .log_counter
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let (level, msg) = match count % 5 {
+            0 => (defmt_parser::Level::Info, "System booted successfully"),
+            1 => (defmt_parser::Level::Debug, "BLE advertising started"),
+            2 => (defmt_parser::Level::Warn, "Memory usage above 80%"),
+            3 => (
+                defmt_parser::Level::Info,
+                "Sensor reading: temperature=23.5C",
+            ),
+            _ => (
+                defmt_parser::Level::Error,
+                "Failed to write to flash sector 7",
+            ),
+        };
+        Ok(vec![DefmtLogEntry {
+            level: Some(level),
+            timestamp: format!("{:.3}", count as f64 * 2.0),
+            location: Some("dummy_firmware/src/main.rs:42".to_string()),
+            msg: msg.to_string(),
+        }])
     }
 }
