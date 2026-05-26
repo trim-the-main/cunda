@@ -162,13 +162,11 @@ class _GpioSectionState extends ConsumerState<GpioSection> {
   @override
   Widget build(BuildContext context) {
     _log.fine("Listening to gpio button events stream");
-    final StreamController<String> buttonEventOutput =
-        StreamController<String>();
 
     ref.listen(gpioButtonEventsProvider(widget.device), (prev, next) {
       next.whenData((value) {
         final time = DateFormat('Hms').format(value.$1);
-        buttonEventOutput.sink.add(
+        _buttonEventOutput.sink.add(
           "$time Pressed for ${value.$2.pressTimeInMs} ms  ",
         );
       });
@@ -178,7 +176,7 @@ class _GpioSectionState extends ConsumerState<GpioSection> {
         .when(
           data: (eDispatcher) => [
             ConsoleLikeTextField(
-              txtStream: buttonEventOutput.stream,
+              txtStream: _buttonEventOutput.stream,
               rowCount: 4,
             ),
             SizedBox(height: 12),
