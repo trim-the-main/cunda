@@ -9,6 +9,8 @@ pub struct FirmwareInfo {
     pub device_type: String,
     pub firmware_version: String,
     pub protocol_version: u32,
+    #[serde(default)]
+    pub git_hash: Option<String>,
 }
 
 /// Known component keys within a `.mayna` archive.
@@ -38,6 +40,8 @@ pub struct PackageManifest {
     pub device_type: String,
     pub firmware_version: String,
     pub protocol_version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub git_hash: Option<String>,
     pub min_firmware_version: String,
     pub publish_date: String,
     #[serde(deserialize_with = "deserialize_components")]

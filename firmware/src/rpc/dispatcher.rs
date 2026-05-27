@@ -22,7 +22,6 @@ use protocol::{
 
 protocol::define_mayna_metadata! {
     device_type: "cunda",
-    firmware_version: env!("CARGO_PKG_VERSION"),
     protocol_version: protocol::v1::VERSION,
 }
 
@@ -32,13 +31,7 @@ fn get_device_id(
     _rqst: NoArg,
 ) -> protocol::types::DeviceId {
     defmt::debug!("Handling get_device_id");
-    protocol::types::DeviceId::new(
-        protocol::get_mayna_metadata!(device_type),
-        0,
-        0,
-        protocol::get_mayna_metadata!(firmware_version),
-        protocol::get_mayna_metadata!(protocol_version),
-    )
+    protocol::new_device_id_from_metadata!(hardware_revision: 0, serial_number: 0)
 }
 
 async fn get_sys_settings(

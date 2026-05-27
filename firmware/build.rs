@@ -1,8 +1,33 @@
 fn main() {
+    embed_git_hash();
     linker_be_nice();
     println!("cargo:rustc-link-arg=-Tdefmt.x");
     // make sure linkall.x is the last linker script (otherwise might cause problems with flip-link)
     println!("cargo:rustc-link-arg=-Tlinkall.x");
+}
+
+fn embed_git_hash() {
+    let clean = std::process::Command::new("git")
+        .args(["diff-index", "--quiet", "HEAD"])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    let git_hash = if clean {
+        std::process::Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    println!("cargo:rustc-env=GIT_HASH={}", git_hash);
+    println!("cargo:rerun-if-changed=../.git/HEAD");
+    println!("cargo:rerun-if-changed=../.git/index");
 }
 
 fn linker_be_nice() {

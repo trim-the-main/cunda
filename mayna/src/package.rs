@@ -139,6 +139,7 @@ fn build_manifest(
         device_type: meta.device_type.clone(),
         firmware_version: meta.firmware_version.clone(),
         protocol_version: meta.protocol_version,
+        git_hash: meta.git_hash.as_ref().filter(|s| !s.is_empty()).cloned(),
         min_firmware_version,
         publish_date,
         components,
@@ -202,7 +203,15 @@ pub fn create(config: CreateConfig) -> Result<PathBuf> {
     );
     let manifest_json = serde_json::to_string_pretty(&manifest)?;
 
-    let archive_name = format!("{}_{}.mayna", meta.device_type, meta.firmware_version);
+    let archive_name = match &meta.git_hash {
+        Some(hash) => format!(
+            "{}_{}_{}.mayna",
+            meta.device_type,
+            meta.firmware_version,
+            &hash[..8]
+        ),
+        None => format!("{}_{}.mayna", meta.device_type, meta.firmware_version),
+    };
     let archive_path = config.output_dir.join(&archive_name);
     write_archive(&archive_path, &manifest_json, &entries)?;
 

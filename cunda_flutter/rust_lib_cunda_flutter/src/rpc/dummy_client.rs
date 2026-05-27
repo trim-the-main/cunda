@@ -91,7 +91,19 @@ impl EndpointDispatcher for DummyFlutterProtocolClient {
     async fn get_device_id(&self, _req: NoArg) -> Result<DeviceId, FrbPostcardRpcError> {
         log::debug!("Get device id called");
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-        Ok(DeviceId::new("cunda", 1, 1, "0.0.0-fake_device", 1))
+        Ok(DeviceId::new(
+            "cunda",
+            1,
+            1,
+            "0.0.0",
+            1,
+            Some(
+                protocol::types::GitRevSha::from_hex_str(
+                    "deadbeef01234567feedbacc89012345deadfaad",
+                )
+                .unwrap(),
+            ),
+        ))
     }
 
     async fn get_sys_settings(&self, _req: NoArg) -> Result<SysSettings, FrbPostcardRpcError> {
