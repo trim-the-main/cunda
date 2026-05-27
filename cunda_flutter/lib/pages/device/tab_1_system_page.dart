@@ -6,6 +6,7 @@ import 'package:cunda_flutter/providers/ble/ble_providers.dart';
 import 'package:cunda_flutter/providers/rpc/client.dart';
 import 'package:cunda_flutter/providers/rpc/protocol.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
+import 'package:cunda_flutter/utils/rust_type_helpers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -502,7 +503,7 @@ class StatusTableWidget extends StatelessWidget {
         builder: (context, ref, child) => ref
             .watch(deviceIdProvider(device))
             .when(
-              data: (deviceId) => Text(deviceId.firmwareVersion),
+              data: (deviceId) => Text(firmwareVersionText(deviceId)),
               error: (error, stackTrace) => Text("Error"),
               loading: () => LinearProgressIndicator(),
             ),

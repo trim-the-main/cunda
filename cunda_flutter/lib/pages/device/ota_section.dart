@@ -10,6 +10,7 @@ import 'package:cunda_flutter/providers/rpc/protocol.dart';
 import 'package:cunda_flutter/services/mayna/mayna_types.dart';
 import 'package:cunda_flutter/services/mayna/package_registry.dart';
 import 'package:cunda_flutter/services/mayna/version.dart';
+import 'package:cunda_flutter/utils/rust_type_helpers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -230,7 +231,9 @@ class _OtaSectionState extends ConsumerState<OtaSection> {
 
     if (candidate == null ||
         !isValidUpdate(deviceId.firmwareVersion, candidate.firmwareVersion)) {
-      return Text("No update available");
+      return Text(
+        "Current: ${firmwareVersionText(deviceId)} — no update available",
+      );
     }
 
     final firmwareBinary = registry.componentPath(
