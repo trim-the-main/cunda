@@ -426,7 +426,7 @@ class _CurrentFirmwareCard extends StatelessWidget {
             _kv(context, 'Version', firmwareVersionText(deviceId)),
             _kv(context, 'Device type', deviceId.deviceType),
             _kv(context, 'Protocol', deviceId.protocolVersion.toString()),
-            _kv(context, 'Published', publishDate ?? 'Publish date unknown'),
+            if (publishDate != null) _kv(context, 'Published', publishDate),
           ],
         ),
       ),
