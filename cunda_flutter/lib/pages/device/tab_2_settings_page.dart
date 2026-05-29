@@ -1,5 +1,4 @@
 import 'package:cunda_flutter/pages/device/application_settings_section.dart';
-import 'package:cunda_flutter/pages/device/ota_section.dart';
 import 'package:cunda_flutter/pages/device/systems_settings_section.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -28,12 +27,6 @@ class SettingsTabPage extends ConsumerWidget {
         child: Padding(
           padding: const EdgeInsets.all(8.0),
           child: SystemsSettingsSection(device: device),
-        ),
-      ),
-      Card(
-        child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: OtaSection(device: device),
         ),
       ),
     ];

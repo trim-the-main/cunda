@@ -4,6 +4,7 @@ import 'package:cunda_flutter/pages/device/tab_2_settings_page.dart';
 import 'package:cunda_flutter/pages/device/tab_3_bandwidth_page.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
 import 'package:cunda_flutter/pages/device/logs_page.dart';
+import 'package:cunda_flutter/pages/device/ota_page.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -13,7 +14,7 @@ import 'package:logging/logging.dart';
 // ignore: unused_element
 final _log = Logger('DevicePage');
 
-enum _DeviceMenuAction { logs }
+enum _DeviceMenuAction { logs, ota }
 
 class DevicePage extends StatelessWidget {
   final BluetoothDevice device;
@@ -34,11 +35,19 @@ class DevicePage extends StatelessWidget {
                   context,
                   MaterialPageRoute(builder: (_) => LogsPage(device: device)),
                 ),
+                _DeviceMenuAction.ota => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => OtaPage(device: device)),
+                ),
               },
               itemBuilder: (BuildContext context) => const [
                 PopupMenuItem(
                   value: _DeviceMenuAction.logs,
                   child: Text('Logs'),
+                ),
+                PopupMenuItem(
+                  value: _DeviceMenuAction.ota,
+                  child: Text('Firmware Update'),
                 ),
               ],
             ),
