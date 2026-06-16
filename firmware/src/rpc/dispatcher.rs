@@ -31,6 +31,8 @@ fn get_device_id(
     _rqst: NoArg,
 ) -> protocol::types::DeviceId {
     defmt::debug!("Handling get_device_id");
+    // TODO: Both hardware revision and serial number should be read or calculated from
+    // the persistent storage or eFuse...
     protocol::new_device_id_from_metadata!(hardware_revision: 0, serial_number: 0)
 }
 
