@@ -28,7 +28,7 @@ macro_rules! topic_dispatcher_trait {
 macro_rules! topics_for_flutter {
     ($($any_token:tt)*) => {
         ::postcard_rpc::topics!($($any_token)*);
-        make_sure_direction_is_to_client!($($any_token)*);
+        $crate::make_sure_direction_is_to_client!($($any_token)*);
     };
 }
 
@@ -41,16 +41,17 @@ macro_rules! make_sure_direction_is_to_client {
         };
     };
     (@parse_line $smth:ident = $smth_else:tt; $($tail:tt)*) => {
-        make_sure_direction_is_to_client!(@parse_line $($tail)*);
+        $crate::make_sure_direction_is_to_client!(@parse_line $($tail)*);
     };
     (@parse_line $($x:tt)*) => {
         compile_error!("Topic direction TopicDirection::ToServer is not supported");
     };
     ($($x:tt)*) => {
-        make_sure_direction_is_to_client!(@parse_line $($x)*);
+        $crate::make_sure_direction_is_to_client!(@parse_line $($x)*);
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! endpoint_handler_trait_for_flutter {
     (
@@ -71,11 +72,12 @@ macro_rules! endpoint_handler_trait_for_flutter {
         }
     };
 }
+
 // pass-through for the postcard_rpc::endpoints macro
 #[macro_export]
 macro_rules! endpoints_for_flutter {
     ($($any_token:tt)*) => {
         postcard_rpc::endpoints!{$($any_token)*}
-        endpoint_handler_trait_for_flutter!{$($any_token)*}
+        $crate::endpoint_handler_trait_for_flutter!{$($any_token)*}
     }
 }
