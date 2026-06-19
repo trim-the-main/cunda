@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
 import 'package:cunda_flutter/pages/device/device_view_model.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
 import 'package:cunda_flutter/providers/rpc/client.dart';
@@ -63,8 +63,8 @@ class BluetoothConnectionStatusCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final deviceConn = ref.watch(connectionManagerProvider(device));
-    final eDispatcher = ref.watch(endpointDispatcherProvider(device));
-    return eDispatcher.when(
+    final sysD = ref.watch(sysDispatcherProvider(device));
+    return sysD.when(
       data: (_) =>
           connectionCard(context, deviceConn, RpcConnectionStatus.rpcConnected),
       error: (err, s) {

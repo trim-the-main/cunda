@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/defmt_log_translation.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc.dart';
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1/endpoints.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
 import 'package:cunda_flutter/providers/package_registry_provider.dart';
 import 'package:cunda_flutter/providers/rpc/client.dart';
 import 'package:cunda_flutter/providers/rpc/protocol.dart';
@@ -71,25 +71,23 @@ Future<LogDecoder?> initializedLogDecoder(
 // defmt logs coming through a topic
 @Riverpod(keepAlive: true, retry: noRetry)
 Stream<Uint8List> deviceLogs(Ref ref, BluetoothDevice device) async* {
-  final eDispatcher = await ref.watch(
-    endpointDispatcherProvider(device).future,
-  );
+  final sysD = await ref.watch(sysDispatcherProvider(device).future);
   final tDispatcher = await ref.watch(topicDispatcherProvider(device).future);
   final logStream = tDispatcher.createSysLogsTopicStream();
 
-  eDispatcher.startSysLogsTopic(req: NoArg());
+  sysD.startSysLogsTopic(req: NoArg());
   bool keepRunning = ref.read(logTopicEnabledProvider(device));
   ref.listen(logTopicEnabledProvider(device), (_, next) => keepRunning = next);
   ref.onCancel(() {
     if (!keepRunning) {
       _log.warning("Stop sys logs stream, we got canceled");
-      eDispatcher.stopSysLogsTopic(req: NoArg());
+      sysD.stopSysLogsTopic(req: NoArg());
     }
   });
   ref.onResume(() {
     if (!keepRunning) {
       _log.warning("Resume sys logs stream");
-      eDispatcher.startSysLogsTopic(req: NoArg());
+      sysD.startSysLogsTopic(req: NoArg());
     }
   });
   await for (final logMsg in logStream) {

@@ -1,5 +1,5 @@
 use frb_prpc_juggle::client_interface::TopicSink;
-use protocol::topics::{BandwidthTestTopic, BandwidthTestTopicData};
+use protocol::devices::demo_esp32::v1::{topics::*, types::*};
 use serde::de::DeserializeOwned;
 
 use crate::defmt_log_translation::{DefmtLogEntry, LogDecodingError};
@@ -95,10 +95,6 @@ where
     }
 }
 
-use protocol::{
-    topics::{ButtonEvent, ButtonEvents, LogMessage, SysLogsTopic, SysStatsTopic},
-    v1::SysStats,
-};
 frb_prpc_juggle::topic_dispatcher_trait! {
     trait_name = TopicDispatcher;
     sink_type = StreamSink;

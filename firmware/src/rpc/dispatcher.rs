@@ -11,25 +11,21 @@ use postcard_rpc::{
     header::VarHeader,
     server::{Sender, SpawnContext},
 };
-use protocol::{
-    endpoints::*,
-    topics::{
-        BandwidthTestTopic, BandwidthTestTopicData, ButtonEvent, ButtonEvents, LogMessage,
-        SysLogsTopic, SysStatsTopic,
-    },
-    v1::{MemoryUsage, SysStats},
+use protocol::devices::demo_esp32::{
+    DEVICE_TYPE,
+    v1::{RPC_PROTOCOL_VERSION, endpoints::*, topics, types},
 };
 
 protocol::define_mayna_metadata! {
-    device_type: "cunda",
-    protocol_version: protocol::v1::VERSION,
+    device_type: DEVICE_TYPE,
+    protocol_version: RPC_PROTOCOL_VERSION,
 }
 
 fn get_device_id(
     _context: &mut DispatchContext,
     _header: VarHeader,
-    _rqst: NoArg,
-) -> protocol::types::DeviceId {
+    _rqst: types::NoArg,
+) -> types::DeviceId {
     defmt::debug!("Handling get_device_id");
     // TODO: Both hardware revision and serial number should be read or calculated from
     // the persistent storage or eFuse...
@@ -39,10 +35,10 @@ fn get_device_id(
 async fn get_sys_settings(
     _context: &mut DispatchContext,
     _header: VarHeader,
-    _rqst: NoArg,
-) -> protocol::endpoints::SysSettings {
+    _rqst: types::NoArg,
+) -> types::SysSettings {
     defmt::debug!("Handling get_sys_settings");
-    let mut ret = protocol::endpoints::SysSettings::new();
+    let mut ret = types::SysSettings::default();
     match crate::storage::SYSTEM_CONFIG.get().await {
         Ok(s) => ret.ble_device_name = s.ble_adv_name,
         _ => {}
@@ -52,8 +48,8 @@ async fn get_sys_settings(
 async fn set_sys_settings(
     _context: &mut DispatchContext,
     _header: VarHeader,
-    rqst: protocol::endpoints::SysSettings,
-) -> protocol::endpoints::EmptyRes {
+    rqst: types::SysSettings,
+) -> types::EmptyRes {
     defmt::debug!("Handling set_sys_settings");
     let mut new_config = crate::storage::SysConfig::default();
     new_config.ble_adv_name = rqst.ble_device_name;
@@ -61,23 +57,23 @@ async fn set_sys_settings(
     if crate::storage::SYSTEM_CONFIG.set(new_config).await.is_err() {
         defmt::error!("Failed to save sys settings");
     }
-    protocol::endpoints::EmptyRes {}
+    types::EmptyRes {}
 }
 
 fn sys_ping(
     _context: &mut DispatchContext,
     _header: VarHeader,
-    _rqst: NoArg,
-) -> protocol::endpoints::EmptyRes {
+    _rqst: types::NoArg,
+) -> types::EmptyRes {
     defmt::debug!("Handling sys_ping");
-    protocol::endpoints::EmptyRes {}
+    types::EmptyRes {}
 }
 
-fn sys_stats() -> SysStats {
+fn sys_stats() -> protocol::types::SysStats {
     let memstats = esp_alloc::HEAP.stats();
-    SysStats {
+    protocol::types::SysStats {
         cpu_usage: crate::stats::cpu_stats(),
-        memory_usage: MemoryUsage {
+        memory_usage: protocol::types::MemoryUsage {
             used: memstats.current_usage as u32,
             total: memstats.size as u32,
         },
@@ -89,13 +85,13 @@ fn sys_stats() -> SysStats {
 async fn start_sys_stats_topic(
     context: DispatchSpawnContext,
     header: VarHeader,
-    _rqst: NoArg,
+    _rqst: types::NoArg,
     sender: Sender<BleWireTxImpl>,
 ) {
     defmt::debug!("Handling start_sys_stats_topic");
     let topic_stop_signal = context
         .task_table
-        .stop_signal(protocol::topics::SysStatsTopic::TOPIC_KEY);
+        .stop_signal(topics::SysStatsTopic::TOPIC_KEY);
     topic_stop_signal.try_take(); // clear the pending stop signals (we haven't responded to the start request yet.)
     let _guard = crate::stats::start_collecting_stats();
     if let Err(err) = sender
@@ -113,7 +109,10 @@ async fn start_sys_stats_topic(
     loop {
         let stats = sys_stats();
 
-        if let Err(err) = sender.publish::<SysStatsTopic>(seq.into(), &stats).await {
+        if let Err(err) = sender
+            .publish::<topics::SysStatsTopic>(seq.into(), &stats)
+            .await
+        {
             defmt::error!("Send error! {}", err);
             break;
         }
@@ -128,28 +127,28 @@ async fn start_sys_stats_topic(
 fn stop_sys_stats_topic(
     context: &mut DispatchContext,
     _header: VarHeader,
-    _rqst: NoArg,
-) -> protocol::endpoints::EmptyRes {
+    _rqst: types::NoArg,
+) -> types::EmptyRes {
     defmt::debug!("Handling stop_sys_stats_topic");
 
     let topic_stop_signal = context
         .task_table
-        .stop_signal(protocol::topics::SysStatsTopic::TOPIC_KEY);
+        .stop_signal(topics::SysStatsTopic::TOPIC_KEY);
     topic_stop_signal.signal(());
-    protocol::endpoints::EmptyRes {}
+    types::EmptyRes {}
 }
 
 #[embassy_executor::task]
 async fn start_sys_logs_topic(
     context: DispatchSpawnContext,
     header: VarHeader,
-    _rqst: NoArg,
+    _rqst: types::NoArg,
     sender: Sender<BleWireTxImpl>,
 ) {
     defmt::debug!("Handling start_sys_logs_topic");
     let topic_stop_signal = context
         .task_table
-        .stop_signal(protocol::topics::SysLogsTopic::TOPIC_KEY);
+        .stop_signal(topics::SysLogsTopic::TOPIC_KEY);
     topic_stop_signal.try_take(); // clear the pending stop signals (we haven't responded to the start request yet.)
     if let Err(err) = sender
         .reply::<StartSysLogsTopic>(header.seq_no, &(().into()))
@@ -173,7 +172,7 @@ async fn start_sys_logs_topic(
         let logs_to_send = match select(logger.wait_for_log(), topic_stop_signal.wait()).await {
             Either::First(grant) => {
                 // Here we are sending the log messages. Don't log anything in this block
-                let mut log_msg = LogMessage::default();
+                let mut log_msg = protocol::types::LogMessage::default();
                 log_msg.defmt_bytes.clear();
                 log_msg
                     .defmt_bytes
@@ -185,7 +184,7 @@ async fn start_sys_logs_topic(
             Either::Second(_) => break,
         };
         if let Err(err) = sender
-            .publish::<SysLogsTopic>(seq.into(), &logs_to_send)
+            .publish::<topics::SysLogsTopic>(seq.into(), &logs_to_send)
             .await
         {
             defmt::error!("Send error! {}", err);
@@ -198,18 +197,18 @@ async fn start_sys_logs_topic(
 fn stop_sys_logs_topic(
     context: &mut DispatchContext,
     _header: VarHeader,
-    _rqst: NoArg,
-) -> protocol::endpoints::EmptyRes {
+    _rqst: types::NoArg,
+) -> types::EmptyRes {
     defmt::debug!("Handling stop_sys_logs_topic");
 
     let topic_stop_signal = context
         .task_table
-        .stop_signal(protocol::topics::SysLogsTopic::TOPIC_KEY);
+        .stop_signal(topics::SysLogsTopic::TOPIC_KEY);
     topic_stop_signal.signal(());
-    protocol::endpoints::EmptyRes {}
+    types::EmptyRes {}
 }
 
-async fn get_mtu(context: &mut DispatchContext, _header: VarHeader, _rqst: NoArg) -> u16 {
+async fn get_mtu(context: &mut DispatchContext, _header: VarHeader, _rqst: types::NoArg) -> u16 {
     defmt::debug!("Handling get_mtu");
     context.tx.get_current_mtu().await.unwrap_or(0)
 }
@@ -218,10 +217,10 @@ async fn get_mtu(context: &mut DispatchContext, _header: VarHeader, _rqst: NoArg
 async fn get_appl_settings(
     _context: &mut DispatchContext,
     _header: VarHeader,
-    _rqst: NoArg,
-) -> protocol::endpoints::ApplSettings {
+    _rqst: types::NoArg,
+) -> types::ApplSettings {
     defmt::debug!("Handling get_appl_settings");
-    let mut a_settings = protocol::endpoints::ApplSettings::new();
+    let mut a_settings = types::ApplSettings::new();
     match crate::storage::APP_CONFIG.get().await {
         Ok(a) => a_settings.led_blink_duration_ms = a.led_blink_duration,
         _ => {}
@@ -232,8 +231,8 @@ async fn get_appl_settings(
 async fn set_appl_settings(
     _context: &mut DispatchContext,
     _header: VarHeader,
-    rqst: protocol::endpoints::ApplSettings,
-) -> protocol::endpoints::EmptyRes {
+    rqst: types::ApplSettings,
+) -> types::EmptyRes {
     defmt::debug!("Handling set_appl_settings");
     let mut new_config = crate::storage::ApplicationConfig::default();
     new_config.led_blink_duration = rqst.led_blink_duration_ms;
@@ -241,14 +240,14 @@ async fn set_appl_settings(
     if crate::storage::APP_CONFIG.set(new_config).await.is_err() {
         defmt::error!("Failed to save app settings");
     }
-    protocol::endpoints::EmptyRes {}
+    types::EmptyRes {}
 }
 
 async fn blink_led_n_times(
     context: &mut DispatchContext,
     _header: VarHeader,
     rqst: u8,
-) -> protocol::endpoints::EmptyRes {
+) -> types::EmptyRes {
     defmt::debug!("Handling blink_led_n_times");
     let times = rqst;
     let led = &mut context.led;
@@ -265,7 +264,7 @@ async fn blink_led_n_times(
         led.set_low();
         ticker.next().await;
     }
-    protocol::endpoints::EmptyRes {}
+    types::EmptyRes {}
 }
 
 const DEBOUNCE_TIME_MS: u64 = 20;
@@ -282,9 +281,9 @@ async fn button_events_topic_worker(button: &Mutex<Input<'static>>, sender: Send
         }
         .as_millis();
         if sender
-            .publish::<ButtonEvents>(
+            .publish::<topics::ButtonEvents>(
                 seq.into(),
-                &ButtonEvent {
+                &types::ButtonEvent {
                     press_time_in_ms: pressed_for as u32,
                 },
             )
@@ -303,13 +302,13 @@ async fn button_events_topic_worker(button: &Mutex<Input<'static>>, sender: Send
 async fn start_button_events_topic(
     context: DispatchSpawnContext,
     header: VarHeader,
-    _rqst: NoArg,
+    _rqst: types::NoArg,
     sender: Sender<BleWireTxImpl>,
 ) {
     defmt::debug!("Handling start_button_events_topic");
     let topic_stop_signal = context
         .task_table
-        .stop_signal(protocol::topics::ButtonEvents::TOPIC_KEY);
+        .stop_signal(topics::ButtonEvents::TOPIC_KEY);
     // Consume any pending stop signal, these have arrived before we started (we started the task, we are in it,
     // but we haven't responded to the spawn Rpc request yet. So for the client we are still starting...)
     let _ = topic_stop_signal.try_take();
@@ -339,24 +338,24 @@ async fn start_button_events_topic(
 async fn stop_button_events_topic(
     context: &mut DispatchContext,
     _header: VarHeader,
-    _rqst: NoArg,
-) -> protocol::endpoints::EmptyRes {
+    _rqst: types::NoArg,
+) -> types::EmptyRes {
     defmt::error!("Handling stop_button_events_topic");
 
     let topic_stop_signal = context
         .task_table
-        .stop_signal(protocol::topics::ButtonEvents::TOPIC_KEY);
+        .stop_signal(topics::ButtonEvents::TOPIC_KEY);
     topic_stop_signal.signal(());
-    protocol::endpoints::EmptyRes {}
+    types::EmptyRes {}
 }
 
 fn echo(
     _context: &mut DispatchContext,
     _header: VarHeader,
-    rqst: EchoRequest,
-) -> protocol::endpoints::EchoResponse {
+    rqst: types::EchoRequest,
+) -> types::EchoResponse {
     defmt::debug!("Handling echo");
-    protocol::endpoints::EchoResponse { inner: rqst.inner }
+    types::EchoResponse { inner: rqst.inner }
 }
 
 const fn topic_state<const SIZE: usize>(map: TopicMap) -> [(&'static Key, TopicStopSignal); SIZE] {
@@ -387,8 +386,8 @@ impl TopicTaskTable {
             .expect("Every topic has to have a topic task entry")
     }
 }
-static TOPIC_TASK_STATE: [(&'static Key, TopicStopSignal); protocol::topics::TOPICS.topics.len()] =
-    topic_state(protocol::topics::TOPICS);
+static TOPIC_TASK_STATE: [(&'static Key, TopicStopSignal); topics::TOPICS.topics.len()] =
+    topic_state(topics::TOPICS);
 
 pub(crate) struct DispatchContext {
     task_table: TopicTaskTable,
@@ -448,13 +447,13 @@ use postcard_rpc::server::impls::embedded_io_async_v0_6::dispatch_impl::{WireSpa
 async fn start_bandwidth_test_topic(
     context: DispatchSpawnContext,
     header: VarHeader,
-    _rqst: NoArg,
+    _rqst: types::NoArg,
     sender: Sender<BleWireTxImpl>,
 ) {
     defmt::debug!("Handling start_bandwidth_test_topic");
     let topic_stop_signal = context
         .task_table
-        .stop_signal(protocol::topics::BandwidthTestTopic::TOPIC_KEY);
+        .stop_signal(topics::BandwidthTestTopic::TOPIC_KEY);
 
     let _ = topic_stop_signal.try_take();
     if sender
@@ -468,9 +467,9 @@ async fn start_bandwidth_test_topic(
 
     let mut seq = 0u8;
     loop {
-        let data = BandwidthTestTopicData::new(Instant::now().as_ticks() as u8);
+        let data = types::BandwidthTestTopicData::new(Instant::now().as_ticks() as u8);
         if sender
-            .publish::<BandwidthTestTopic>(seq.into(), &data)
+            .publish::<topics::BandwidthTestTopic>(seq.into(), &data)
             .await
             .is_err()
         {
@@ -493,24 +492,24 @@ async fn start_bandwidth_test_topic(
 async fn stop_bandwidth_test_topic(
     context: &mut DispatchContext,
     _header: VarHeader,
-    _rqst: NoArg,
-) -> protocol::endpoints::EmptyRes {
+    _rqst: types::NoArg,
+) -> types::EmptyRes {
     defmt::error!("Handling stop_bandwidth_test_topic");
 
     let topic_stop_signal = context
         .task_table
-        .stop_signal(protocol::topics::BandwidthTestTopic::TOPIC_KEY);
+        .stop_signal(topics::BandwidthTestTopic::TOPIC_KEY);
     topic_stop_signal.signal(());
-    protocol::endpoints::EmptyRes {}
+    types::EmptyRes {}
 }
 
 fn do_nothing(
     _context: &mut DispatchContext,
     _header: VarHeader,
-    _rqst: BandwidthTestData,
-) -> protocol::endpoints::EmptyRes {
+    _rqst: types::BandwidthTestData,
+) -> types::EmptyRes {
     defmt::debug!("Handling do_nothing");
-    protocol::endpoints::EmptyRes {}
+    types::EmptyRes {}
 }
 
 define_dispatch! {
@@ -521,8 +520,7 @@ define_dispatch! {
     context: DispatchContext;
 
     endpoints: {
-        list: protocol::endpoints::ENDPOINT_LIST;
-
+        list: ENDPOINT_LIST;
         | EndpointTy          | kind                | handler               |
         | ----------          | ----                | -------               |
         | GetDeviceId         | blocking            | get_device_id         |
@@ -551,12 +549,12 @@ define_dispatch! {
         | TestBandwidth           | blocking          | do_nothing                           |
     };
     topics_in: {
-        list: protocol::topics::EMPTY_TOPICS;
+        list: topics::EMPTY_TOPICS;
 
         | TopicTy                   | kind      | handler                       |
         | ----------                | ----      | -------                       |
     };
     topics_out: {
-        list: protocol::topics::TOPICS;
+        list: topics::TOPICS;
     };
 }

@@ -1,53 +1,20 @@
+use crate::type_helpers::hex_nibble;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "flutter")]
-macro_rules! ProtocolStringType {
-    () => {
-        ::std::string::String
-    };
-    ($N:expr) => {
-        ::std::string::String
-    };
-    (capacity: $N:literal) => {
-        ::std::string::String
-    };
-}
-
-#[cfg(not(feature = "flutter"))]
-macro_rules! ProtocolStringType {
-    () => {
-        ProtocolStringType!(16)
-    };
-    ($N:expr) => {
-        ProtocolStringType!(capacity: $N)
-    };
-    (capacity: $N:literal) => {
-        ::heapless::String<$N>
-    };
-}
-
-#[cfg(feature = "flutter")]
-macro_rules! ProtocolVecType {
-    ($t:ty, $N:expr) => {
-        ::std::vec::Vec<$t>
-    };
-}
-
-#[cfg(not(feature = "flutter"))]
-macro_rules! ProtocolVecType {
-    ($t:ty, $N:expr) => {
-        ::heapless::Vec<$t, $N>
-    };
-}
-
-const fn hex_nibble(c: u8) -> u8 {
-    match c {
-        b'0'..=b'9' => c - b'0',
-        b'a'..=b'f' => c - b'a' + 10,
-        b'A'..=b'F' => c - b'A' + 10,
-        _ => panic!("invalid hex digit"),
-    }
+pub mod cunda_defaults {
+    pub use super::EmptyRes;
+    pub use super::NoArg;
+    pub use super::PError;
+    // SYSTEM
+    pub use super::DeviceId;
+    pub use super::LogMessage;
+    pub use super::SysSettings;
+    pub use super::SysStats;
+    // OTA
+    pub use super::OtaBytes;
+    pub use super::OtaMData;
+    pub use super::OtaResult;
 }
 
 #[derive(Serialize, Deserialize, Schema, Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -85,7 +52,7 @@ pub struct DeviceId {
     pub device_type: ProtocolStringType!(capacity: 16),
     pub hardware_revision: u32,
     pub serial_number: u32,
-    pub firmware_version: ProtocolStringType!(capacity: 16),
+    pub firmware_version: VersionString,
     pub protocol_version: u32,
     pub git_hash: Option<GitRevSha>,
 }
@@ -108,4 +75,88 @@ impl DeviceId {
             git_hash,
         }
     }
+}
+pub type VersionString = ProtocolStringType!(capacity: 16);
+
+#[derive(Serialize, Deserialize, Schema, Debug, Clone, Default)]
+pub struct NoArg {}
+
+impl From<()> for NoArg {
+    fn from(_value: ()) -> Self {
+        Self {}
+    }
+}
+
+#[derive(Serialize, Deserialize, Schema, Debug, Clone, Default)]
+pub struct EmptyRes {}
+
+impl From<()> for EmptyRes {
+    fn from(_value: ()) -> Self {
+        Self {}
+    }
+}
+
+#[derive(Serialize, Deserialize, Schema, Debug, Clone)]
+pub enum PError {
+    SpawnError,
+}
+////////////////////////
+/// OTA
+///////////////////////
+#[derive(Serialize, Deserialize, Schema, Debug, Clone, Default)]
+pub struct OtaMData {
+    pub size: u32,
+    pub hash_sha256: [u8; 32],
+    pub version: VersionString,
+}
+
+#[derive(Serialize, Deserialize, Schema, Debug, Clone)]
+pub enum OtaResult {
+    TransferReady,
+    TransferComplete,
+    Restarting,
+    StorageError,
+    VerificationError,
+    NotSupported,
+}
+
+#[derive(Serialize, Deserialize, Schema, Debug, Clone, Default)]
+pub struct OtaBytes {
+    pub offset: u32,
+    pub data: ProtocolVecType!(u8, 4096),
+}
+
+/// LOGS TOPIC
+#[derive(Serialize, Deserialize, Schema, Debug, Clone, Default)]
+pub struct LogMessage {
+    pub defmt_bytes: ProtocolVecType!(u8, 1024),
+}
+
+#[derive(Serialize, Deserialize, Schema, Debug, Copy, Clone, Default)]
+pub struct Percent(pub u8);
+
+#[derive(Serialize, Deserialize, Schema, Debug, Copy, Clone, Default)]
+pub struct CpuUsage {
+    pub core0: Percent,
+    pub core1: Percent,
+}
+#[derive(Serialize, Deserialize, Schema, Debug, Copy, Clone, Default)]
+pub struct MemoryUsage {
+    pub used: u32,
+    pub total: u32,
+}
+
+#[derive(Serialize, Deserialize, Schema, Debug, Copy, Clone, Default)]
+pub struct SysStats {
+    pub cpu_usage: CpuUsage,
+    pub memory_usage: MemoryUsage,
+    pub uptime: u32,
+}
+
+#[derive(Serialize, Deserialize, Schema, Debug, Clone, Default)]
+pub struct SysSettings {
+    // TODO: move the heapless constants to somewhere
+    pub wifi_ssid: ProtocolStringType!(32),
+    pub wifi_password: ProtocolStringType!(63),
+    pub ble_device_name: ProtocolStringType!(20),
 }

@@ -1,5 +1,5 @@
 use postcard_rpc::header::VarHeader;
-use protocol::endpoints::{NoArg, OtaBytes, OtaMData, OtaResult};
+use protocol::types::{NoArg, OtaBytes, OtaMData, OtaResult};
 
 use crate::rpc::dispatcher::DispatchContext;
 

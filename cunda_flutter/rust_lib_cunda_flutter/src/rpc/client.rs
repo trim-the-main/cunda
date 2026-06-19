@@ -78,7 +78,8 @@ impl ClientEndpointInterface for FlutterClient {
     }
 }
 
-impl protocol::endpoints::EndpointDispatcher for FlutterClient {}
+impl protocol::devices::demo_esp32::v1::endpoints::CundaEndpoints for FlutterClient {}
+impl protocol::devices::demo_esp32::v1::endpoints::DemoAppEndpoints for FlutterClient {}
 
 impl ClientTopicInterface for FlutterClient {
     async fn subscribe<T: Topic>(&self, sink: Box<dyn TopicSink>) -> Result<(), FrbPostcardRpcError>

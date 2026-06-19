@@ -4,7 +4,7 @@ import 'dart:math';
 
 import 'package:async/async.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc/client.dart';
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1/endpoints.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
 import 'package:cunda_flutter/services/ble/ble.dart';
 import 'package:cunda_flutter/utils/riverpod_utils.dart';

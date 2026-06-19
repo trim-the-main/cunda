@@ -1,4 +1,4 @@
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1/endpoints.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
 import 'package:cunda_flutter/providers/rpc/protocol.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -43,7 +43,7 @@ class _SystemsSettingsSectionState
   }
 
   void save() {
-    final SysSettings newSettings = SysSettings(
+    final newSettings = SysSettings(
       wifiSsid: "",
       wifiPassword: "",
       bleDeviceName: bleDeviceNameController.text,

@@ -5,7 +5,7 @@ use core::{
 
 use embassy_time::{Duration, Instant};
 use maitake_sync::{WaitQueue, blocking::RwLock};
-use protocol::v1::{CpuUsage, Percent};
+use protocol::types::{CpuUsage, Percent};
 /// A simple table to track CPU consumption
 ///
 

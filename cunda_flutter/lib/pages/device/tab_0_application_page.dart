@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/v1/endpoints.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/devices/demo_esp32/v1/types.dart';
 import 'package:cunda_flutter/providers/rpc/protocol.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
 import 'package:flutter/material.dart';
@@ -76,8 +76,8 @@ class EchoSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final eDispatcher = ref.watch(endpointDispatcherProvider(widget.device));
-    final child = eDispatcher.when(
+    final appD = ref.watch(appDispatcherProvider(widget.device));
+    final child = appD.when(
       data: (eDispatcher) => TextField(
         decoration: InputDecoration(
           border: OutlineInputBorder(),
@@ -172,9 +172,9 @@ class _GpioSectionState extends ConsumerState<GpioSection> {
       });
     });
     final rows = ref
-        .watch(endpointDispatcherProvider(widget.device))
+        .watch(appDispatcherProvider(widget.device))
         .when(
-          data: (eDispatcher) => [
+          data: (appD) => [
             ConsoleLikeTextField(
               txtStream: _buttonEventOutput.stream,
               rowCount: 4,
@@ -184,7 +184,7 @@ class _GpioSectionState extends ConsumerState<GpioSection> {
             Center(
               child: ElevatedButton(
                 onPressed: () {
-                  eDispatcher.blinkLedEndpoint(req: 1);
+                  appD.blinkLedEndpoint(req: 1);
                 },
                 child: Text("Blink Once"),
               ),
@@ -193,7 +193,7 @@ class _GpioSectionState extends ConsumerState<GpioSection> {
             Center(
               child: ElevatedButton(
                 onPressed: () {
-                  eDispatcher.blinkLedEndpoint(req: 2);
+                  appD.blinkLedEndpoint(req: 2);
                 },
                 child: Text("Blink Twice"),
               ),
@@ -202,7 +202,7 @@ class _GpioSectionState extends ConsumerState<GpioSection> {
             Center(
               child: ElevatedButton(
                 onPressed: () {
-                  eDispatcher.blinkLedEndpoint(req: 3);
+                  appD.blinkLedEndpoint(req: 3);
                 },
                 child: Text("Blink Thrice"),
               ),

@@ -13,7 +13,7 @@ use frb_prpc_juggle::client_interface::{
     ClientEndpointInterface, ClientTopicInterface, FrbPostcardRpcError, TopicSink,
 };
 use postcard_rpc::{Key, Topic};
-use protocol::{endpoints::*, topics::*, types::DeviceId, v1::*};
+use protocol::devices::demo_esp32::v1::{endpoints::*, topics::*, types::*};
 use rand::Rng;
 use serde::de::DeserializeOwned;
 use tokio::sync::Mutex;
@@ -87,7 +87,7 @@ impl ClientEndpointInterface for DummyFlutterProtocolClient {
     }
 }
 
-impl EndpointDispatcher for DummyFlutterProtocolClient {
+impl CundaEndpoints for DummyFlutterProtocolClient {
     async fn get_device_id(&self, _req: NoArg) -> Result<DeviceId, FrbPostcardRpcError> {
         log::debug!("Get device id called");
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
@@ -165,6 +165,72 @@ impl EndpointDispatcher for DummyFlutterProtocolClient {
         }
     }
 
+    async fn start_sys_logs_topic(&self, _req: NoArg) -> Result<EmptyRes, FrbPostcardRpcError> {
+        log::debug!("Start sys logs topic called");
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        if let Some(running) = self
+            .streams_running_status
+            .lock()
+            .await
+            .get(&SysLogsTopic::TOPIC_KEY)
+        {
+            running.store(true, std::sync::atomic::Ordering::Release);
+            Ok(EmptyRes {})
+        } else {
+            Err(FrbPostcardRpcError::InternalError)
+        }
+    }
+
+    async fn stop_sys_logs_topic(&self, _req: NoArg) -> Result<EmptyRes, FrbPostcardRpcError> {
+        log::debug!("Stop sys logs topic called");
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        if let Some(flag) = self
+            .streams_running_status
+            .lock()
+            .await
+            .get(&SysLogsTopic::TOPIC_KEY)
+        {
+            flag.store(false, std::sync::atomic::Ordering::Release);
+            Ok(EmptyRes {})
+        } else {
+            Err(FrbPostcardRpcError::InternalError)
+        }
+    }
+
+    async fn get_mtu(&self, _req: NoArg) -> Result<u16, FrbPostcardRpcError> {
+        log::debug!("Get MTU called");
+        Ok(251)
+    }
+
+    async fn prepare_ota(&self, _req: OtaMData) -> Result<OtaResult, FrbPostcardRpcError> {
+        log::debug!("Prepare OTA called");
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        Ok(OtaResult::TransferReady)
+    }
+
+    async fn transfer_ota_bytes(&self, _req: OtaBytes) -> Result<OtaResult, FrbPostcardRpcError> {
+        Ok(OtaResult::TransferReady)
+    }
+
+    async fn finalize_ota(&self, _req: NoArg) -> Result<OtaResult, FrbPostcardRpcError> {
+        log::debug!("Finalize OTA called");
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        Ok(OtaResult::TransferComplete)
+    }
+
+    async fn approve_firmware(&self, _req: NoArg) -> Result<OtaResult, FrbPostcardRpcError> {
+        log::debug!("Approve firmware called");
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        Ok(OtaResult::TransferReady)
+    }
+
+    async fn factory_reset(&self, _req: NoArg) -> Result<OtaResult, FrbPostcardRpcError> {
+        log::debug!("Factory reset called");
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        Ok(OtaResult::Restarting)
+    }
+}
+impl DemoAppEndpoints for DummyFlutterProtocolClient {
     async fn get_appl_settings(&self, _req: NoArg) -> Result<ApplSettings, FrbPostcardRpcError> {
         log::debug!("Get appl settings called");
         tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
@@ -232,38 +298,6 @@ impl EndpointDispatcher for DummyFlutterProtocolClient {
         }
     }
 
-    async fn start_sys_logs_topic(&self, _req: NoArg) -> Result<EmptyRes, FrbPostcardRpcError> {
-        log::debug!("Start sys logs topic called");
-        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-        if let Some(running) = self
-            .streams_running_status
-            .lock()
-            .await
-            .get(&SysLogsTopic::TOPIC_KEY)
-        {
-            running.store(true, std::sync::atomic::Ordering::Release);
-            Ok(EmptyRes {})
-        } else {
-            Err(FrbPostcardRpcError::InternalError)
-        }
-    }
-
-    async fn stop_sys_logs_topic(&self, _req: NoArg) -> Result<EmptyRes, FrbPostcardRpcError> {
-        log::debug!("Stop sys logs topic called");
-        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-        if let Some(flag) = self
-            .streams_running_status
-            .lock()
-            .await
-            .get(&SysLogsTopic::TOPIC_KEY)
-        {
-            flag.store(false, std::sync::atomic::Ordering::Release);
-            Ok(EmptyRes {})
-        } else {
-            Err(FrbPostcardRpcError::InternalError)
-        }
-    }
-
     async fn start_test_topic_bandwidth(
         &self,
         _req: NoArg,
@@ -302,11 +336,6 @@ impl EndpointDispatcher for DummyFlutterProtocolClient {
         }
     }
 
-    async fn get_mtu(&self, _req: NoArg) -> Result<u16, FrbPostcardRpcError> {
-        log::debug!("Get MTU called");
-        Ok(251)
-    }
-
     async fn echo_endpoint(&self, req: EchoRequest) -> Result<EchoResponse, FrbPostcardRpcError> {
         log::debug!("Echo endpoint called");
         Ok(EchoResponse { inner: req.inner })
@@ -318,34 +347,6 @@ impl EndpointDispatcher for DummyFlutterProtocolClient {
     ) -> Result<EmptyRes, FrbPostcardRpcError> {
         log::debug!("Test bandwidth called");
         Ok(EmptyRes {})
-    }
-
-    async fn prepare_ota(&self, _req: OtaMData) -> Result<OtaResult, FrbPostcardRpcError> {
-        log::debug!("Prepare OTA called");
-        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-        Ok(OtaResult::TransferReady)
-    }
-
-    async fn transfer_ota_bytes(&self, _req: OtaBytes) -> Result<OtaResult, FrbPostcardRpcError> {
-        Ok(OtaResult::TransferReady)
-    }
-
-    async fn finalize_ota(&self, _req: NoArg) -> Result<OtaResult, FrbPostcardRpcError> {
-        log::debug!("Finalize OTA called");
-        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-        Ok(OtaResult::TransferComplete)
-    }
-
-    async fn approve_firmware(&self, _req: NoArg) -> Result<OtaResult, FrbPostcardRpcError> {
-        log::debug!("Approve firmware called");
-        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-        Ok(OtaResult::TransferReady)
-    }
-
-    async fn factory_reset(&self, _req: NoArg) -> Result<OtaResult, FrbPostcardRpcError> {
-        log::debug!("Factory reset called");
-        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-        Ok(OtaResult::Restarting)
     }
 }
 
@@ -414,22 +415,22 @@ impl TopicDispatcher for DummyFlutterProtocolClient {
             [
                 SysStats {
                     uptime: 1,
-                    cpu_usage: protocol::v1::CpuUsage {
-                        core0: Percent(10),
-                        core1: Percent(50),
+                    cpu_usage: protocol::types::CpuUsage {
+                        core0: protocol::types::Percent(10),
+                        core1: protocol::types::Percent(50),
                     },
-                    memory_usage: MemoryUsage {
+                    memory_usage: protocol::types::MemoryUsage {
                         used: 12_542,
                         total: 96_123,
                     },
                 },
                 SysStats {
                     uptime: 2,
-                    cpu_usage: protocol::v1::CpuUsage {
-                        core0: Percent(10),
-                        core1: Percent(11),
+                    cpu_usage: protocol::types::CpuUsage {
+                        core0: protocol::types::Percent(10),
+                        core1: protocol::types::Percent(11),
                     },
-                    memory_usage: MemoryUsage {
+                    memory_usage: protocol::types::MemoryUsage {
                         used: 24532,
                         total: 96_123,
                     },
