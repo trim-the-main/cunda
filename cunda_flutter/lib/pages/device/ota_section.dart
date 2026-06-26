@@ -2,7 +2,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/lib.dart';
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/devices/demo_esp32/v1/endpoints.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_defaults/v1/endpoints.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_defaults/v1/types.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
 import 'package:cunda_flutter/providers/package_registry_provider.dart';
 import 'package:cunda_flutter/providers/rpc/protocol.dart';
@@ -43,7 +44,7 @@ class OtaSection extends ConsumerWidget {
 
   void _startUpdate(
     BuildContext context,
-    CundaEndpoints dispatcher,
+    CundaSys dispatcher,
     OtaMData otaMData,
     File firmwareBinary,
   ) {
@@ -58,10 +59,7 @@ class OtaSection extends ConsumerWidget {
     );
   }
 
-  Future<void> _factoryReset(
-    BuildContext context,
-    CundaEndpoints dispatcher,
-  ) async {
+  Future<void> _factoryReset(BuildContext context, CundaSys dispatcher) async {
     final confirmed = await showConfirmDialog(
       context: context,
       title: 'Confirm Action',
@@ -91,7 +89,7 @@ class OtaSection extends ConsumerWidget {
 
   Future<void> _forceFirmwareUpdate(
     BuildContext context,
-    CundaEndpoints dispatcher,
+    CundaSys dispatcher,
     DeviceId deviceId,
     PackageRegistry registry,
   ) async {
@@ -453,7 +451,7 @@ class _CurrentFirmwareCard extends StatelessWidget {
 class FirmwareFlashDialog extends StatefulWidget {
   final OtaMData otaMData;
   final File file;
-  final CundaEndpoints dispatcher;
+  final CundaSys dispatcher;
 
   const FirmwareFlashDialog({
     super.key,

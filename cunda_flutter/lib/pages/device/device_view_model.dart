@@ -3,6 +3,7 @@
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_defaults/v1/types.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/devices/demo_esp32/v1/types.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
 import 'package:cunda_flutter/providers/rpc/protocol.dart';
@@ -46,7 +47,9 @@ Stream<SysStats> systemStatsStream(Ref ref, BluetoothDevice device) async* {
   final sysD = await ref.watch(sysDispatcherProvider(device).future);
 
   // Subscribe to the topic
-  final tDispatcher = await ref.watch(topicDispatcherProvider(device).future);
+  final tDispatcher = await ref.watch(
+    sysTopicDispatcherProvider(device).future,
+  );
   final sysStatsStream = tDispatcher.createSysStatsTopicStream();
 
   await sysD.startSysStatsTopic(req: NoArg());
@@ -73,7 +76,9 @@ Stream<SysStats> systemStatsStream(Ref ref, BluetoothDevice device) async* {
 Stream<String> downstreamBandwidth(Ref ref, BluetoothDevice device) async* {
   _log.info("Downstream bandwidth stream");
   final appD = await ref.watch(appDispatcherProvider(device).future);
-  final tDispatcher = await ref.watch(topicDispatcherProvider(device).future);
+  final tDispatcher = await ref.watch(
+    appTopicDispatcherProvider(device).future,
+  );
   final bandwidthTopicStream = tDispatcher.createBandwidthTestTopicStream();
 
   await appD.startTestTopicBandwidth(req: NoArg());

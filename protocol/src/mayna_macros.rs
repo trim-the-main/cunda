@@ -7,8 +7,8 @@ macro_rules! define_mayna_metadata {
         const __MAYNA_META_DEVICE_TYPE: &str = $dt;
         const __MAYNA_META_FIRMWARE_VERSION: &str = env!("CARGO_PKG_VERSION");
         const __MAYNA_META_PROTOCOL_VERSION: u32 = $pv;
-        const __MAYNA_META_GIT_REV: Option<$crate::types::GitRevSha> =
-            $crate::types::GitRevSha::from_hex_str(env!("GIT_HASH"));
+        const __MAYNA_META_GIT_REV: Option<$crate::cunda_defaults::v1::types::GitRevSha> =
+            $crate::cunda_defaults::v1::types::GitRevSha::from_hex_str(env!("GIT_HASH"));
 
         const _: () = {
             const JSON_BASE: &str = ::const_format::concatcp!(
@@ -74,7 +74,7 @@ macro_rules! get_mayna_metadata {
 #[macro_export]
 macro_rules! new_device_id_from_metadata {
     (hardware_revision: $hardware_revision:expr, serial_number: $serial_number:expr $(,)?) => {
-        $crate::types::DeviceId::new(
+        $crate::cunda_defaults::v1::types::DeviceId::new(
             $crate::get_mayna_metadata!(device_type),
             $hardware_revision,
             $serial_number,

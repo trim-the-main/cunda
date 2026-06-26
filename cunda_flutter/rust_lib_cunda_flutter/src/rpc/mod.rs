@@ -1,5 +1,4 @@
 use frb_prpc_juggle::client_interface::TopicSink;
-use protocol::devices::demo_esp32::v1::{topics::*, types::*};
 use serde::de::DeserializeOwned;
 
 use crate::defmt_log_translation::{DefmtLogEntry, LogDecodingError};
@@ -94,14 +93,4 @@ where
         }
     }
 }
-
-frb_prpc_juggle::topic_dispatcher_trait! {
-    trait_name = TopicDispatcher;
-    sink_type = StreamSink;
-    | TopicTy       | MessageTy
-    | -------       | ---------
-    | SysStatsTopic | SysStats
-    | SysLogsTopic  | LogMessage
-    | ButtonEvents  | ButtonEvent
-    | BandwidthTestTopic | BandwidthTestTopicData
-}
+protocol::cunda_defaults::v1::topics::define_topic_trait!(SysTopics with StreamSink);

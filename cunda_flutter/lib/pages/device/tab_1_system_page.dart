@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_defaults/v1/types.dart';
 import 'package:cunda_flutter/pages/device/device_view_model.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
 import 'package:cunda_flutter/providers/rpc/client.dart';

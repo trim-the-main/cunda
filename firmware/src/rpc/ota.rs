@@ -1,7 +1,7 @@
 use postcard_rpc::header::VarHeader;
-use protocol::types::{NoArg, OtaBytes, OtaMData, OtaResult};
+use protocol::cunda_defaults::v1::types::{NoArg, OtaBytes, OtaMData, OtaResult};
 
-use crate::rpc::dispatcher::DispatchContext;
+use crate::rpc::context::DispatchContext;
 
 pub(super) async fn prepare(
     _context: &mut DispatchContext,

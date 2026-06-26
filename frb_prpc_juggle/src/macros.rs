@@ -22,35 +22,6 @@ macro_rules! topic_dispatcher_trait {
     };
 }
 
-// pass-through for the postcard_rpc::topics macro
-// just disable the topics to the server
-#[macro_export]
-macro_rules! topics_for_flutter {
-    ($($any_token:tt)*) => {
-        ::postcard_rpc::topics!($($any_token)*);
-        $crate::make_sure_direction_is_to_client!($($any_token)*);
-    };
-}
-
-#[macro_export]
-macro_rules! make_sure_direction_is_to_client {
-    (@parse_line direction = $dir:expr; $($tail:tt)*) => {
-        const _: () = {
-            const _IS_GOOD_DIRECTION: bool = matches!($dir, ::postcard_rpc::TopicDirection::ToClient);
-            const _: () = assert!(_IS_GOOD_DIRECTION, "Only TopicDirection::ToClient is supported");
-        };
-    };
-    (@parse_line $smth:ident = $smth_else:tt; $($tail:tt)*) => {
-        $crate::make_sure_direction_is_to_client!(@parse_line $($tail)*);
-    };
-    (@parse_line $($x:tt)*) => {
-        compile_error!("Topic direction TopicDirection::ToServer is not supported");
-    };
-    ($($x:tt)*) => {
-        $crate::make_sure_direction_is_to_client!(@parse_line $($x)*);
-    };
-}
-
 #[doc(hidden)]
 #[macro_export]
 macro_rules! endpoint_handler_trait_for_flutter {

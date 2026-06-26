@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc/client.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_defaults/v1/endpoints.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_defaults/v1/types.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/devices/demo_esp32/v1/endpoints.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/devices/demo_esp32/v1/types.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
@@ -15,9 +18,9 @@ part 'protocol.g.dart';
 final _log = Logger('ProtocolProvider');
 
 @Riverpod(keepAlive: true, retry: noRetry)
-FutureOr<CundaEndpoints> sysDispatcher(Ref ref, BluetoothDevice device) async {
+FutureOr<CundaSys> sysDispatcher(Ref ref, BluetoothDevice device) async {
   final client = await ref.watch(rpcClientProvider(device).future);
-  return client as CundaEndpoints;
+  return client as CundaSys;
 }
 
 @Riverpod(keepAlive: true, retry: noRetry)
@@ -30,12 +33,18 @@ FutureOr<DemoAppEndpoints> appDispatcher(
 }
 
 @Riverpod(keepAlive: true, retry: noRetry)
-FutureOr<TopicDispatcher> topicDispatcher(
+FutureOr<SysTopics> sysTopicDispatcher(Ref ref, BluetoothDevice device) async {
+  final client = await ref.watch(rpcClientProvider(device).future);
+  return client as SysTopics;
+}
+
+@Riverpod(keepAlive: true, retry: noRetry)
+FutureOr<DemoAppTopics> appTopicDispatcher(
   Ref ref,
   BluetoothDevice device,
 ) async {
   final client = await ref.watch(rpcClientProvider(device).future);
-  return client as TopicDispatcher;
+  return client as DemoAppTopics;
 }
 
 // A simple wrapper around button events stream. We attach timestamps
@@ -46,7 +55,9 @@ Stream<(DateTime, ButtonEvent)> gpioButtonEvents(
   BluetoothDevice device,
 ) async* {
   final appD = await ref.watch(appDispatcherProvider(device).future);
-  final tDispatcher = await ref.watch(topicDispatcherProvider(device).future);
+  final tDispatcher = await ref.watch(
+    appTopicDispatcherProvider(device).future,
+  );
   final buttonEventsStream = tDispatcher.createButtonEventsStream();
 
   appD.startButtonEventsTopic(req: NoArg());

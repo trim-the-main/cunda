@@ -13,7 +13,10 @@ use frb_prpc_juggle::client_interface::{
     ClientEndpointInterface, ClientTopicInterface, FrbPostcardRpcError, TopicSink,
 };
 use postcard_rpc::{Key, Topic};
-use protocol::devices::demo_esp32::v1::{endpoints::*, topics::*, types::*};
+use protocol::{
+    cunda_defaults::v1::{endpoints::CundaSys, topics::*, types},
+    devices::demo_esp32::v1::{endpoints::*, topics::*, types::*},
+};
 use rand::Rng;
 use serde::de::DeserializeOwned;
 use tokio::sync::Mutex;
@@ -21,7 +24,7 @@ use tokio::sync::Mutex;
 use crate::{
     defmt_log_translation::{DefmtLogEntry, LogDecodingError},
     frb_generated::{self, StreamSink},
-    rpc::TopicDispatcher,
+    rpc::{client::DemoAppTopics, SysTopics},
 };
 
 #[flutter_rust_bridge::frb(opaque)]
@@ -87,7 +90,7 @@ impl ClientEndpointInterface for DummyFlutterProtocolClient {
     }
 }
 
-impl CundaEndpoints for DummyFlutterProtocolClient {
+impl CundaSys for DummyFlutterProtocolClient {
     async fn get_device_id(&self, _req: NoArg) -> Result<DeviceId, FrbPostcardRpcError> {
         log::debug!("Get device id called");
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
@@ -98,10 +101,7 @@ impl CundaEndpoints for DummyFlutterProtocolClient {
             "0.0.0",
             1,
             Some(
-                protocol::types::GitRevSha::from_hex_str(
-                    "deadbeef01234567feedbacc89012345deadfaad",
-                )
-                .unwrap(),
+                types::GitRevSha::from_hex_str("deadbeef01234567feedbacc89012345deadfaad").unwrap(),
             ),
         ))
     }
@@ -406,7 +406,7 @@ where
     }
 }
 
-impl TopicDispatcher for DummyFlutterProtocolClient {
+impl SysTopics for DummyFlutterProtocolClient {
     async fn create_sys_stats_topic_stream(
         &self,
         sink: StreamSink<SysStats>,
@@ -415,22 +415,22 @@ impl TopicDispatcher for DummyFlutterProtocolClient {
             [
                 SysStats {
                     uptime: 1,
-                    cpu_usage: protocol::types::CpuUsage {
-                        core0: protocol::types::Percent(10),
-                        core1: protocol::types::Percent(50),
+                    cpu_usage: types::CpuUsage {
+                        core0: types::Percent(10),
+                        core1: types::Percent(50),
                     },
-                    memory_usage: protocol::types::MemoryUsage {
+                    memory_usage: types::MemoryUsage {
                         used: 12_542,
                         total: 96_123,
                     },
                 },
                 SysStats {
                     uptime: 2,
-                    cpu_usage: protocol::types::CpuUsage {
-                        core0: protocol::types::Percent(10),
-                        core1: protocol::types::Percent(11),
+                    cpu_usage: types::CpuUsage {
+                        core0: types::Percent(10),
+                        core1: types::Percent(11),
                     },
-                    memory_usage: protocol::types::MemoryUsage {
+                    memory_usage: types::MemoryUsage {
                         used: 24532,
                         total: 96_123,
                     },
@@ -450,7 +450,31 @@ impl TopicDispatcher for DummyFlutterProtocolClient {
 
         Ok(())
     }
+    async fn create_sys_logs_topic_stream(
+        &self,
+        sink: StreamSink<LogMessage>,
+    ) -> Result<(), FrbPostcardRpcError> {
+        let log_stream = PeriodicTopicOutput::<LogMessage, _>::new(
+            [LogMessage {
+                defmt_bytes: vec![0u8; 8],
+            }],
+            core::time::Duration::from_secs(2),
+        );
 
+        let mut streams_running_status_guard = self.streams_running_status.lock().await;
+        let keep_notifying = streams_running_status_guard
+            .entry(SysLogsTopic::TOPIC_KEY)
+            .or_insert(Arc::new(AtomicBool::new(false)));
+        let handle = log_stream
+            .leak_into_sink(sink, keep_notifying.clone())
+            .await;
+        self.topic_join_handles.lock().await.push(handle);
+
+        Ok(())
+    }
+}
+
+impl DemoAppTopics for DummyFlutterProtocolClient {
     async fn create_button_events_stream(
         &self,
         sink: StreamSink<ButtonEvent>,
@@ -481,29 +505,6 @@ impl TopicDispatcher for DummyFlutterProtocolClient {
             .entry(ButtonEvents::TOPIC_KEY)
             .or_insert(Arc::new(AtomicBool::new(true))); //always on
         let handle = button_stream
-            .leak_into_sink(sink, keep_notifying.clone())
-            .await;
-        self.topic_join_handles.lock().await.push(handle);
-
-        Ok(())
-    }
-
-    async fn create_sys_logs_topic_stream(
-        &self,
-        sink: StreamSink<LogMessage>,
-    ) -> Result<(), FrbPostcardRpcError> {
-        let log_stream = PeriodicTopicOutput::<LogMessage, _>::new(
-            [LogMessage {
-                defmt_bytes: vec![0u8; 8],
-            }],
-            core::time::Duration::from_secs(2),
-        );
-
-        let mut streams_running_status_guard = self.streams_running_status.lock().await;
-        let keep_notifying = streams_running_status_guard
-            .entry(SysLogsTopic::TOPIC_KEY)
-            .or_insert(Arc::new(AtomicBool::new(false)));
-        let handle = log_stream
             .leak_into_sink(sink, keep_notifying.clone())
             .await;
         self.topic_join_handles.lock().await.push(handle);

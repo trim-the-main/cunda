@@ -15,7 +15,8 @@ use postcard_rpc_ble::{BleWireTx, DispatcherRunner, PrpcBleConn, PrpcBleStorage}
 use static_cell::StaticCell;
 use trouble_host::prelude::*;
 
-use crate::rpc::dispatcher::{BleDispatcher, DispatchContext};
+use crate::rpc::context::DispatchContext;
+use crate::rpc::dispatcher::BleDispatcher;
 
 pub(crate) mod constants {
     pub(crate) const CONNECTIONS_MAX: usize = 1;

@@ -72,7 +72,9 @@ Future<LogDecoder?> initializedLogDecoder(
 @Riverpod(keepAlive: true, retry: noRetry)
 Stream<Uint8List> deviceLogs(Ref ref, BluetoothDevice device) async* {
   final sysD = await ref.watch(sysDispatcherProvider(device).future);
-  final tDispatcher = await ref.watch(topicDispatcherProvider(device).future);
+  final tDispatcher = await ref.watch(
+    sysTopicDispatcherProvider(device).future,
+  );
   final logStream = tDispatcher.createSysLogsTopicStream();
 
   sysD.startSysLogsTopic(req: NoArg());
