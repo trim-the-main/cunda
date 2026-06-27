@@ -1,7 +1,7 @@
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc/client.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc/dummy_client.dart';
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_defaults/v1/endpoints.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common/v1/endpoints.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/devices/demo_esp32/v1/endpoints.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
 import 'package:cunda_flutter/providers/rpc/device_logs.dart';
@@ -22,17 +22,17 @@ DummyFlutterProtocolClient _clientFor(BluetoothDevice device) {
 List<Override> fakeProviderOverrides() {
   return [
     bleServiceProvider.overrideWithValue(FakeBleService()),
-    appDispatcherProvider.overrideWith(
+    appEndpointsProvider.overrideWith(
       (ref, device) async => _clientFor(device) as DemoAppEndpoints,
     ),
-    sysDispatcherProvider.overrideWith(
-      (ref, device) async => _clientFor(device) as CundaSys,
+    sysEndpointsProvider.overrideWith(
+      (ref, device) async => _clientFor(device) as CundaSysE,
     ),
-    appTopicDispatcherProvider.overrideWith(
+    appTopicsProvider.overrideWith(
       (ref, device) async => _clientFor(device) as DemoAppTopics,
     ),
-    sysTopicDispatcherProvider.overrideWith(
-      (ref, device) async => _clientFor(device) as SysTopics,
+    sysTopicsProvider.overrideWith(
+      (ref, device) async => _clientFor(device) as CundaSysT,
     ),
     logDecoderProvider.overrideWith(
       (ref, device) async => _clientFor(device) as LogDecoder,

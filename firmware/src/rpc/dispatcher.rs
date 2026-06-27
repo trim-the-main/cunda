@@ -7,7 +7,8 @@ use postcard_rpc::server::impls::embedded_io_async_v0_6::dispatch_impl::{WireSpa
 // fully qualified paths for handler functions, it expects identifiers
 use crate::rpc::app_handlers::*;
 use crate::rpc::sys_handlers::*;
-use protocol::cunda_defaults::v1::endpoints::*;
+use protocol::cunda_common::GetDeviceId;
+use protocol::cunda_common::v1::endpoints::*;
 
 define_dispatch! {
     app: BleDispatcher;

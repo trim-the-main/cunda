@@ -19,14 +19,6 @@ pub trait LogDecoder {
     fn decode_log(&self, bytes: &[u8]) -> Result<Vec<DefmtLogEntry>, LogDecodingError>;
 }
 
-#[flutter_rust_bridge::frb(init)]
-pub fn init_app() {
-    // Default utilities - feel free to customize
-    flutter_rust_bridge::setup_default_user_utils();
-    #[cfg(target_os = "linux")]
-    env_logger::builder().format_timestamp_micros().init();
-}
-
 #[flutter_rust_bridge::frb(mirror(FrameTooLong))]
 pub struct _FrameTooLong {
     /// The length of the too-long frame
@@ -93,4 +85,4 @@ where
         }
     }
 }
-protocol::cunda_defaults::v1::topics::define_topic_trait!(SysTopics with StreamSink);
+protocol::cunda_common::v1::topics::define_topic_trait!(CundaSysT with StreamSink);

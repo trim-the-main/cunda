@@ -14,7 +14,7 @@ use frb_prpc_juggle::client_interface::{
 };
 use postcard_rpc::{Key, Topic};
 use protocol::{
-    cunda_defaults::v1::{endpoints::CundaSys, topics::*, types},
+    cunda_common::v1::{endpoints::*, topics::*, types},
     devices::demo_esp32::v1::{endpoints::*, topics::*, types::*},
 };
 use rand::Rng;
@@ -24,7 +24,7 @@ use tokio::sync::Mutex;
 use crate::{
     defmt_log_translation::{DefmtLogEntry, LogDecodingError},
     frb_generated::{self, StreamSink},
-    rpc::{client::DemoAppTopics, SysTopics},
+    rpc::{client::DemoAppTopics, CundaSysT},
 };
 
 #[flutter_rust_bridge::frb(opaque)]
@@ -90,7 +90,7 @@ impl ClientEndpointInterface for DummyFlutterProtocolClient {
     }
 }
 
-impl CundaSys for DummyFlutterProtocolClient {
+impl protocol::cunda_common::CundaDevice for DummyFlutterProtocolClient {
     async fn get_device_id(&self, _req: NoArg) -> Result<DeviceId, FrbPostcardRpcError> {
         log::debug!("Get device id called");
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
@@ -105,7 +105,9 @@ impl CundaSys for DummyFlutterProtocolClient {
             ),
         ))
     }
+}
 
+impl CundaSysE for DummyFlutterProtocolClient {
     async fn get_sys_settings(&self, _req: NoArg) -> Result<SysSettings, FrbPostcardRpcError> {
         log::debug!("Get sys settings called");
         tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
@@ -406,7 +408,7 @@ where
     }
 }
 
-impl SysTopics for DummyFlutterProtocolClient {
+impl CundaSysT for DummyFlutterProtocolClient {
     async fn create_sys_stats_topic_stream(
         &self,
         sink: StreamSink<SysStats>,

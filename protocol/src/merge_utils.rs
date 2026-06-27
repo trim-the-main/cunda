@@ -1,3 +1,9 @@
+/// This file defines two macros: `merge_endpoint_lists`, `merge_topic_lists`.
+/// This allows us to define common set of endpoints and topics in their own
+/// lists (and traits, hence abstract classes in flutter side). For the firmware
+/// we export the merged list so that the firmware can calculate the minimum key
+/// length required.
+// TODO: Example
 use postcard_rpc::uniques::merge_nty_lists;
 
 const fn str_eq(a: &str, b: &str) -> bool {
@@ -150,7 +156,7 @@ macro_rules! _define_merged_const_list {
 
 #[macro_export]
 macro_rules! merge_endpoint_lists {
-    ($l1:expr, $l2:expr) => {
+    ($l1:expr, $l2:expr $(,)?) => {
         const {
             $crate::_define_merged_const_list!(
                 TYPES_MERGED,
@@ -172,11 +178,31 @@ macro_rules! merge_endpoint_lists {
             }
         }
     };
+    ($l1:expr, $l2:expr, $l3:expr $(,)?) => {
+        const {
+            const __FIRST_2: ::postcard_rpc::EndpointMap = $crate::merge_endpoint_lists!($l1, $l2);
+            $crate::merge_endpoint_lists!(__FIRST_2, $l3)
+        }
+    };
+    ($l1:expr, $l2:expr, $l3:expr, $l4:expr $(,)?) => {
+        const {
+            const __FIRST_3: ::postcard_rpc::EndpointMap =
+                $crate::merge_endpoint_lists!($l1, $l2, $l3);
+            $crate::merge_endpoint_lists!(__FIRST_3, $l4)
+        }
+    };
+    ($l1:expr, $l2:expr, $l3:expr, $l4:expr , $l5:expr$(,)?) => {
+        const {
+            const __FIRST_4: ::postcard_rpc::EndpointMap =
+                $crate::merge_endpoint_lists!($l1, $l2, $l3, $l4);
+            $crate::merge_endpoint_lists!(__FIRST_4, $l5)
+        }
+    };
 }
 
 #[macro_export]
 macro_rules! merge_topic_lists {
-    ($l1:expr, $l2:expr) => {
+    ($l1:expr, $l2:expr $(,)?) => {
         const {
             const TP_DIRECTION_SAME: bool = match ($l1.direction, $l2.direction) {
                 (
@@ -215,6 +241,25 @@ macro_rules! merge_topic_lists {
                 types: TYPES_MERGED,
                 topics: TOPICS_MERGED,
             }
+        }
+    };
+    ($l1:expr, $l2:expr, $l3:expr $(,)?) => {
+        const {
+            const __FIRST_2: ::postcard_rpc::TopicMap = $crate::merge_endpoint_lists!($l1, $l2);
+            $crate::merge_topic_lists!(__FIRST_2, $l3)
+        }
+    };
+    ($l1:expr, $l2:expr, $l3:expr, $l4:expr $(,)?) => {
+        const {
+            const __FIRST_3: ::postcard_rpc::TopicMap = $crate::merge_topic_lists!($l1, $l2, $l3);
+            $crate::merge_topic_lists!(__FIRST_3, $l4)
+        }
+    };
+    ($l1:expr, $l2:expr, $l3:expr, $l4:expr , $l5:expr$(,)?) => {
+        const {
+            const __FIRST_4: ::postcard_rpc::TopicMap =
+                $crate::merge_topic_lists!($l1, $l2, $l3, $l4);
+            $crate::merge_topic_lists!(__FIRST_4, $l5)
         }
     };
 }
@@ -257,11 +302,17 @@ mod test {
         | Endpoint3  | Arg3      | Res3       | "endpoint3" |
     }
 
-    pub const ENDPOINT_LIST: postcard_rpc::EndpointMap =
-        merge_endpoint_lists!(ENDPOINT_LIST_1, ENDPOINT_LIST_2);
+    ::postcard_rpc::endpoints! {
+        list = ENDPOINT_LIST_3;
+        | EndpointTy | RequestTy | ResponseTy | Path        |
+        | ---------- | --------- | ---------- | ----        |
+        | Endpoint4  | Arg3      | Res3       | "endpoint4" |
+    }
 
     #[test]
     fn merged_endpoints() {
+        const ENDPOINT_LIST: postcard_rpc::EndpointMap =
+            merge_endpoint_lists!(ENDPOINT_LIST_1, ENDPOINT_LIST_2);
         assert_eq!(ENDPOINT_LIST_1.types.len(), 5);
         println!("{:?}", ENDPOINT_LIST_1.types);
         println!("{:?}", ENDPOINT_LIST_2.types);
@@ -271,5 +322,26 @@ mod test {
         assert_eq!(ENDPOINT_LIST_1.endpoints.len(), 4);
         assert_eq!(ENDPOINT_LIST_2.endpoints.len(), 4);
         assert_eq!(ENDPOINT_LIST.endpoints.len(), 5);
+    }
+
+    #[test]
+    fn merge_multiple_lists() {
+        ::postcard_rpc::endpoints! {
+            list = ENDPOINT_LIST_4;
+            | EndpointTy | RequestTy | ResponseTy | Path        |
+            | ---------- | --------- | ---------- | ----        |
+            | Endpoint4  | Arg3      | Res3       | "endpoint4" |
+        }
+        const ENDPOINT_LIST_MERGED_3: postcard_rpc::EndpointMap =
+            merge_endpoint_lists!(ENDPOINT_LIST_1, ENDPOINT_LIST_2, ENDPOINT_LIST_3);
+        assert_eq!(ENDPOINT_LIST_MERGED_3.endpoints.len(), 6);
+
+        const ENDPOINT_LIST_MERGED_4: postcard_rpc::EndpointMap = merge_endpoint_lists!(
+            ENDPOINT_LIST_1,
+            ENDPOINT_LIST_2,
+            ENDPOINT_LIST_3,
+            ENDPOINT_LIST_4
+        );
+        assert_eq!(ENDPOINT_LIST_MERGED_4.endpoints.len(), 6);
     }
 }

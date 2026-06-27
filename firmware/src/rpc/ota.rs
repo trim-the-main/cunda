@@ -1,5 +1,5 @@
 use postcard_rpc::header::VarHeader;
-use protocol::cunda_defaults::v1::types::{NoArg, OtaBytes, OtaMData, OtaResult};
+use protocol::cunda_common::v1::types::{NoArg, OtaBytes, OtaMData, OtaResult};
 
 use crate::rpc::context::DispatchContext;
 

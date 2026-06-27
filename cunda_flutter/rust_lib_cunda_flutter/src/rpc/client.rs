@@ -7,7 +7,7 @@ use serde::de::DeserializeOwned;
 use crate::{
     defmt_log_translation::{DefmtLogEntry, LogDecoderDefmt, LogDecodingError},
     frb_generated::StreamSink,
-    rpc::{LogDecoder, SysTopics},
+    rpc::{CundaSysT, LogDecoder},
 };
 
 pub struct FlutterClient {
@@ -78,7 +78,8 @@ impl ClientEndpointInterface for FlutterClient {
     }
 }
 
-impl protocol::cunda_defaults::v1::endpoints::CundaSys for FlutterClient {}
+impl protocol::cunda_common::CundaDevice for FlutterClient {}
+impl protocol::cunda_common::v1::endpoints::CundaSysE for FlutterClient {}
 impl protocol::devices::demo_esp32::v1::endpoints::DemoAppEndpoints for FlutterClient {}
 
 impl ClientTopicInterface for FlutterClient {
@@ -97,6 +98,6 @@ impl ClientTopicInterface for FlutterClient {
     }
 }
 
-impl SysTopics for FlutterClient {}
+impl CundaSysT for FlutterClient {}
 protocol::devices::demo_esp32::v1::topics::define_topic_trait!(DemoAppTopics with StreamSink);
 impl DemoAppTopics for FlutterClient {}

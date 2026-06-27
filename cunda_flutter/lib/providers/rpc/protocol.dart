@@ -2,8 +2,9 @@ import 'dart:async';
 
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc/client.dart';
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_defaults/v1/endpoints.dart';
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_defaults/v1/types.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common/v1/endpoints.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common/v1/types.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/devices/demo_esp32/v1/endpoints.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/devices/demo_esp32/v1/types.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
@@ -18,31 +19,25 @@ part 'protocol.g.dart';
 final _log = Logger('ProtocolProvider');
 
 @Riverpod(keepAlive: true, retry: noRetry)
-FutureOr<CundaSys> sysDispatcher(Ref ref, BluetoothDevice device) async {
+FutureOr<CundaSysE> sysEndpoints(Ref ref, BluetoothDevice device) async {
   final client = await ref.watch(rpcClientProvider(device).future);
-  return client as CundaSys;
+  return client as CundaSysE;
 }
 
 @Riverpod(keepAlive: true, retry: noRetry)
-FutureOr<DemoAppEndpoints> appDispatcher(
-  Ref ref,
-  BluetoothDevice device,
-) async {
+FutureOr<DemoAppEndpoints> appEndpoints(Ref ref, BluetoothDevice device) async {
   final client = await ref.watch(rpcClientProvider(device).future);
   return client as DemoAppEndpoints;
 }
 
 @Riverpod(keepAlive: true, retry: noRetry)
-FutureOr<SysTopics> sysTopicDispatcher(Ref ref, BluetoothDevice device) async {
+FutureOr<CundaSysT> sysTopics(Ref ref, BluetoothDevice device) async {
   final client = await ref.watch(rpcClientProvider(device).future);
-  return client as SysTopics;
+  return client as CundaSysT;
 }
 
 @Riverpod(keepAlive: true, retry: noRetry)
-FutureOr<DemoAppTopics> appTopicDispatcher(
-  Ref ref,
-  BluetoothDevice device,
-) async {
+FutureOr<DemoAppTopics> appTopics(Ref ref, BluetoothDevice device) async {
   final client = await ref.watch(rpcClientProvider(device).future);
   return client as DemoAppTopics;
 }
@@ -54,20 +49,18 @@ Stream<(DateTime, ButtonEvent)> gpioButtonEvents(
   Ref ref,
   BluetoothDevice device,
 ) async* {
-  final appD = await ref.watch(appDispatcherProvider(device).future);
-  final tDispatcher = await ref.watch(
-    appTopicDispatcherProvider(device).future,
-  );
+  final eDispatcher = await ref.watch(appEndpointsProvider(device).future);
+  final tDispatcher = await ref.watch(appTopicsProvider(device).future);
   final buttonEventsStream = tDispatcher.createButtonEventsStream();
 
-  appD.startButtonEventsTopic(req: NoArg());
+  eDispatcher.startButtonEventsTopic(req: NoArg());
   ref.onCancel(() {
     _log.warning("Stop button events stream, we got canceled");
-    appD.stopButtonEventsTopic(req: NoArg());
+    eDispatcher.stopButtonEventsTopic(req: NoArg());
   });
   ref.onResume(() {
     _log.warning("Resume button events stream");
-    appD.startButtonEventsTopic(req: NoArg());
+    eDispatcher.startButtonEventsTopic(req: NoArg());
   });
   await for (final event in buttonEventsStream) {
     _log.fine("Yielding button event: $event");
@@ -79,7 +72,7 @@ Stream<(DateTime, ButtonEvent)> gpioButtonEvents(
 class SystemSettings extends _$SystemSettings {
   @override
   FutureOr<SysSettings> build(BluetoothDevice device) async {
-    final sysD = await ref.watch(sysDispatcherProvider(device).future);
+    final sysD = await ref.watch(sysEndpointsProvider(device).future);
     _log.fine("Calling getSysSettings");
     return sysD.getSysSettings(req: NoArg());
   }
@@ -88,7 +81,7 @@ class SystemSettings extends _$SystemSettings {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(
       () => ref
-          .read(sysDispatcherProvider(device).future)
+          .read(sysEndpointsProvider(device).future)
           .then(
             (sysD) => sysD
                 .setSysSettings(req: newSettings)
@@ -102,7 +95,7 @@ class SystemSettings extends _$SystemSettings {
 class ApplicationSettings extends _$ApplicationSettings {
   @override
   FutureOr<ApplSettings> build(BluetoothDevice device) async {
-    final appD = await ref.watch(appDispatcherProvider(device).future);
+    final appD = await ref.watch(appEndpointsProvider(device).future);
     _log.fine("Calling getApplSettings");
     return appD.getApplSettings(req: NoArg());
   }
@@ -111,7 +104,7 @@ class ApplicationSettings extends _$ApplicationSettings {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(
       () => ref
-          .read(appDispatcherProvider(device).future)
+          .read(appEndpointsProvider(device).future)
           .then(
             (appD) => appD
                 .setApplSettings(req: newSettings)
@@ -123,14 +116,14 @@ class ApplicationSettings extends _$ApplicationSettings {
 
 @riverpod
 Future<int> getMtuFromDevice(Ref ref, BluetoothDevice device) async {
-  final sysD = await ref.watch(sysDispatcherProvider(device).future);
+  final sysD = await ref.watch(sysEndpointsProvider(device).future);
   _log.fine("Calling getMtu RPC endpoint");
   return await sysD.getMtu(req: NoArg());
 }
 
 @Riverpod(keepAlive: true, retry: noRetry)
 Future<DeviceId> deviceId(Ref ref, BluetoothDevice device) async {
-  final sysD = await ref.watch(sysDispatcherProvider(device).future);
+  final sysD = await ref.watch(rpcClientProvider(device).future);
   _log.fine("Calling getDeviceId RPC endpoint");
   return sysD.getDeviceId(req: NoArg());
 }

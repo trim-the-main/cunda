@@ -76,7 +76,7 @@ class EchoSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final appD = ref.watch(appDispatcherProvider(widget.device));
+    final appD = ref.watch(appEndpointsProvider(widget.device));
     final child = appD.when(
       data: (eDispatcher) => TextField(
         decoration: InputDecoration(
@@ -172,7 +172,7 @@ class _GpioSectionState extends ConsumerState<GpioSection> {
       });
     });
     final rows = ref
-        .watch(appDispatcherProvider(widget.device))
+        .watch(appEndpointsProvider(widget.device))
         .when(
           data: (appD) => [
             ConsoleLikeTextField(

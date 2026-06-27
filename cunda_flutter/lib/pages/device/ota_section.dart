@@ -2,8 +2,9 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/lib.dart';
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_defaults/v1/endpoints.dart';
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_defaults/v1/types.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common/v1/endpoints.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common/v1/types.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
 import 'package:cunda_flutter/providers/package_registry_provider.dart';
 import 'package:cunda_flutter/providers/rpc/protocol.dart';
@@ -44,7 +45,7 @@ class OtaSection extends ConsumerWidget {
 
   void _startUpdate(
     BuildContext context,
-    CundaSys dispatcher,
+    CundaSysE dispatcher,
     OtaMData otaMData,
     File firmwareBinary,
   ) {
@@ -59,7 +60,7 @@ class OtaSection extends ConsumerWidget {
     );
   }
 
-  Future<void> _factoryReset(BuildContext context, CundaSys dispatcher) async {
+  Future<void> _factoryReset(BuildContext context, CundaSysE dispatcher) async {
     final confirmed = await showConfirmDialog(
       context: context,
       title: 'Confirm Action',
@@ -89,7 +90,7 @@ class OtaSection extends ConsumerWidget {
 
   Future<void> _forceFirmwareUpdate(
     BuildContext context,
-    CundaSys dispatcher,
+    CundaSysE dispatcher,
     DeviceId deviceId,
     PackageRegistry registry,
   ) async {
@@ -155,7 +156,7 @@ class OtaSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final dispatcherAsync = ref.watch(sysDispatcherProvider(device));
+    final dispatcherAsync = ref.watch(sysEndpointsProvider(device));
     final deviceIdAsync = ref.watch(deviceIdProvider(device));
     final registryAsync = ref.watch(packageRegistryProvider);
 
@@ -451,7 +452,7 @@ class _CurrentFirmwareCard extends StatelessWidget {
 class FirmwareFlashDialog extends StatefulWidget {
   final OtaMData otaMData;
   final File file;
-  final CundaSys dispatcher;
+  final CundaSysE dispatcher;
 
   const FirmwareFlashDialog({
     super.key,

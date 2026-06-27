@@ -1,7 +1,7 @@
 use embassy_futures::select::{Either, select};
 use embassy_time::Instant;
 use postcard_rpc::{Topic, header::VarHeader, server::Sender};
-use protocol::cunda_defaults::v1::{endpoints, topics, types};
+use protocol::cunda_common::v1::{endpoints, topics, types};
 
 use crate::{
     ble::BleWireTxImpl,
