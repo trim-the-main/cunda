@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc/client.dart';
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common/v1/endpoints.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common/v1/types.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/devices/demo_esp32/v1/endpoints.dart';
@@ -20,25 +19,25 @@ final _log = Logger('ProtocolProvider');
 
 @Riverpod(keepAlive: true, retry: noRetry)
 FutureOr<CundaSysE> sysEndpoints(Ref ref, BluetoothDevice device) async {
-  final client = await ref.watch(rpcClientProvider(device).future);
+  final client = await ref.watch(demoEsp32ClientProvider(device).future);
   return client as CundaSysE;
 }
 
 @Riverpod(keepAlive: true, retry: noRetry)
 FutureOr<DemoAppEndpoints> appEndpoints(Ref ref, BluetoothDevice device) async {
-  final client = await ref.watch(rpcClientProvider(device).future);
+  final client = await ref.watch(demoEsp32ClientProvider(device).future);
   return client as DemoAppEndpoints;
 }
 
 @Riverpod(keepAlive: true, retry: noRetry)
 FutureOr<CundaSysT> sysTopics(Ref ref, BluetoothDevice device) async {
-  final client = await ref.watch(rpcClientProvider(device).future);
+  final client = await ref.watch(demoEsp32ClientProvider(device).future);
   return client as CundaSysT;
 }
 
 @Riverpod(keepAlive: true, retry: noRetry)
 FutureOr<DemoAppTopics> appTopics(Ref ref, BluetoothDevice device) async {
-  final client = await ref.watch(rpcClientProvider(device).future);
+  final client = await ref.watch(demoEsp32ClientProvider(device).future);
   return client as DemoAppTopics;
 }
 
@@ -119,11 +118,4 @@ Future<int> getMtuFromDevice(Ref ref, BluetoothDevice device) async {
   final sysD = await ref.watch(sysEndpointsProvider(device).future);
   _log.fine("Calling getMtu RPC endpoint");
   return await sysD.getMtu(req: NoArg());
-}
-
-@Riverpod(keepAlive: true, retry: noRetry)
-Future<DeviceId> deviceId(Ref ref, BluetoothDevice device) async {
-  final sysD = await ref.watch(rpcClientProvider(device).future);
-  _log.fine("Calling getDeviceId RPC endpoint");
-  return sysD.getDeviceId(req: NoArg());
 }

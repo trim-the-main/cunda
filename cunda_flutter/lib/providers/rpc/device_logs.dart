@@ -28,7 +28,7 @@ class LogTopicEnabled extends _$LogTopicEnabled {
 
 @Riverpod(keepAlive: true, retry: noRetry)
 FutureOr<LogDecoder> logDecoder(Ref ref, BluetoothDevice device) async {
-  final client = await ref.watch(rpcClientProvider(device).future);
+  final client = await ref.watch(demoEsp32ClientProvider(device).future);
   return client as LogDecoder;
 }
 

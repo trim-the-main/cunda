@@ -1,8 +1,4 @@
-use frb_prpc_juggle::client_interface::{
-    Client, ClientEndpointInterface, ClientTopicInterface, FrbPostcardRpcError, TopicSink,
-};
-use postcard_rpc::Topic;
-use serde::de::DeserializeOwned;
+use frb_prpc_juggle::client_interface::Client;
 
 use crate::{
     defmt_log_translation::{DefmtLogEntry, LogDecoderDefmt, LogDecodingError},
@@ -14,6 +10,14 @@ pub struct FlutterClient {
     inner: Client,
     log_decoder: Option<LogDecoderDefmt>,
 }
+
+impl AsRef<Client> for FlutterClient {
+    fn as_ref(&self) -> &Client {
+        &self.inner
+    }
+}
+
+impl protocol::cunda_common::CundaDevice for FlutterClient {}
 
 impl FlutterClient {
     #[flutter_rust_bridge::frb(sync)]
@@ -61,43 +65,58 @@ impl LogDecoder for FlutterClient {
     }
 }
 
-impl ClientEndpointInterface for FlutterClient {
-    async fn call_rpc_endpoint<E: postcard_rpc::Endpoint>(
-        &self,
-        req: E::Request,
-    ) -> Result<E::Response, FrbPostcardRpcError>
-    where
-        E::Request: serde::Serialize + postcard_schema::Schema + Send,
-        E::Response: serde::de::DeserializeOwned,
-    {
-        self.inner
-            .lock_for_endpoint_call()
-            .await
-            .call_rpc_endpoint::<E>(req)
-            .await
+impl<C> LogDecoder for C
+where
+    C: AsMut<FlutterClient> + AsRef<FlutterClient>,
+{
+    fn init_log_decoder(&mut self, table_bytes: &[u8], loc_bytes: &[u8]) {
+        self.as_mut().init_log_decoder(table_bytes, loc_bytes)
+    }
+
+    fn decode_log(&self, bytes: &[u8]) -> Result<Vec<DefmtLogEntry>, LogDecodingError> {
+        self.as_ref().decode_log(bytes)
     }
 }
 
-impl protocol::cunda_common::CundaDevice for FlutterClient {}
-impl protocol::cunda_common::v1::endpoints::CundaSysE for FlutterClient {}
-impl protocol::devices::demo_esp32::v1::endpoints::DemoAppEndpoints for FlutterClient {}
-
-impl ClientTopicInterface for FlutterClient {
-    async fn subscribe<T: Topic>(&self, sink: Box<dyn TopicSink>) -> Result<(), FrbPostcardRpcError>
-    where
-        T::Message: DeserializeOwned,
-    {
-        self.inner.subscribe::<T>(sink).await
+pub struct DemoClientV1(FlutterClient);
+impl DemoClientV1 {
+    #[flutter_rust_bridge::frb(sync)]
+    pub fn new(fc: FlutterClient) -> Self {
+        Self(fc)
     }
 
-    async fn unsubscribe<T: Topic>(&self) -> Result<(), FrbPostcardRpcError>
-    where
-        T::Message: DeserializeOwned,
-    {
-        self.inner.unsubscribe::<T>().await
+    #[flutter_rust_bridge::frb(sync)]
+    pub fn cunda_device_type() -> String {
+        String::from(protocol::devices::demo_esp32::DEVICE_TYPE)
+    }
+
+    #[flutter_rust_bridge::frb(sync)]
+    pub fn cunda_common_protocol() -> u32 {
+        protocol::devices::demo_esp32::v1::RPC_PROTOCOL_VERSION
     }
 }
 
-impl CundaSysT for FlutterClient {}
+impl AsRef<Client> for DemoClientV1 {
+    fn as_ref(&self) -> &Client {
+        &self.0.as_ref()
+    }
+}
+
+impl AsMut<FlutterClient> for DemoClientV1 {
+    fn as_mut(&mut self) -> &mut FlutterClient {
+        &mut self.0
+    }
+}
+
+impl AsRef<FlutterClient> for DemoClientV1 {
+    fn as_ref(&self) -> &FlutterClient {
+        &self.0
+    }
+}
+
+impl protocol::cunda_common::v1::endpoints::CundaSysE for DemoClientV1 {}
+impl protocol::devices::demo_esp32::v1::endpoints::DemoAppEndpoints for DemoClientV1 {}
+
+impl CundaSysT for DemoClientV1 {}
 protocol::devices::demo_esp32::v1::topics::define_topic_trait!(DemoAppTopics with StreamSink);
-impl DemoAppTopics for FlutterClient {}
+impl DemoAppTopics for DemoClientV1 {}

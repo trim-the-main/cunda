@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:collection/collection.dart';
 import 'package:cunda_flutter/pages/device/device.dart';
+import 'package:cunda_flutter/providers/rpc/client.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -169,23 +170,36 @@ class ScanResultCard extends ConsumerWidget {
     }
 
     if (context.mounted) {
-      _openCb(context);
+      _openCb(context, ref);
     }
   }
 
-  void _openCb(BuildContext context) {
-    _log.fine("openning connection");
-    MaterialPageRoute route = MaterialPageRoute(
-      builder: (context) => DevicePage(device: device),
-      settings: RouteSettings(name: '/connection'),
-    );
-    Navigator.of(context).push(route);
+  void _openCb(BuildContext context, WidgetRef ref) async {
+    _log.fine("openning connection for cunda device");
+
+    final deviceId = await ref.read(deviceIdProvider(device).future);
+    if (!context.mounted) {
+      return;
+    }
+    switch ((deviceId.deviceType, deviceId.protocolVersion)) {
+      case ("demo-esp32", 1):
+        {
+          MaterialPageRoute route = MaterialPageRoute(
+            builder: (context) => DevicePage(device: device),
+            settings: RouteSettings(name: '/connection'),
+          );
+          Navigator.of(context).push(route);
+        }
+      default:
+        {
+          throw StateError("Not a recognized device");
+        }
+    }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final connState = ref.watch(connectionManagerProvider(device));
-    final connManager = ref.read(connectionManagerProvider(device).notifier);
 
     return Padding(
       padding: const EdgeInsets.all(4.0),
@@ -213,7 +227,7 @@ class ScanResultCard extends ConsumerWidget {
           onTap: () {
             switch (connState) {
               case ConnectionTransitionState.connected:
-                _openCb(context);
+                _openCb(context, ref);
               case ConnectionTransitionState.disconnected:
                 _connectCb(context, ref);
               case ConnectionTransitionState.connecting:

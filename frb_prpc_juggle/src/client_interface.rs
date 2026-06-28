@@ -232,7 +232,7 @@ impl Client {
     }
 }
 
-impl ClientEndpointInterface for EndpointHandle<'_> {
+impl EndpointHandle<'_> {
     async fn call_rpc_endpoint<E: postcard_rpc::Endpoint>(
         &self,
         req: E::Request,
@@ -308,6 +308,22 @@ impl ClientEndpointInterface for EndpointHandle<'_> {
     }
 }
 
+impl ClientEndpointInterface for Client {
+    async fn call_rpc_endpoint<E: Endpoint>(
+        &self,
+        req: E::Request,
+    ) -> Result<E::Response, FrbPostcardRpcError>
+    where
+        E::Request: Serialize + Schema + Send,
+        E::Response: DeserializeOwned,
+    {
+        self.lock_for_endpoint_call()
+            .await
+            .call_rpc_endpoint::<E>(req)
+            .await
+    }
+}
+
 impl ClientTopicInterface for Client {
     async fn subscribe<T: Topic>(&self, sink: Box<dyn TopicSink>) -> Result<(), FrbPostcardRpcError>
     where
@@ -331,5 +347,45 @@ impl ClientTopicInterface for Client {
             return Ok(());
         }
         Err(FrbPostcardRpcError::NotSubscribedToTopic)
+    }
+}
+
+impl<T> ClientEndpointInterface for T
+where
+    T: AsRef<Client>,
+{
+    fn call_rpc_endpoint<E: Endpoint>(
+        &self,
+        req: E::Request,
+    ) -> impl core::future::Future<Output = Result<E::Response, FrbPostcardRpcError>> + Send
+    where
+        E::Request: Serialize + Schema + Send,
+        E::Response: DeserializeOwned,
+    {
+        self.as_ref().call_rpc_endpoint::<E>(req)
+    }
+}
+
+impl<C> ClientTopicInterface for C
+where
+    C: AsRef<Client>,
+{
+    fn subscribe<T: Topic>(
+        &self,
+        sink: Box<dyn TopicSink>,
+    ) -> impl std::future::Future<Output = Result<(), FrbPostcardRpcError>> + Send
+    where
+        T::Message: DeserializeOwned,
+    {
+        self.as_ref().subscribe::<T>(sink)
+    }
+
+    fn unsubscribe<T: Topic>(
+        &self,
+    ) -> impl std::future::Future<Output = Result<(), FrbPostcardRpcError>> + Send
+    where
+        T::Message: DeserializeOwned,
+    {
+        self.as_ref().unsubscribe::<T>()
     }
 }
