@@ -1,4 +1,4 @@
-use frb_prpc_juggle::client_interface::Client;
+use frb_prpc_juggle::client_interface::PrpcClient;
 
 use crate::{
     defmt_log_translation::{DefmtLogEntry, LogDecoderDefmt, LogDecodingError},
@@ -6,13 +6,28 @@ use crate::{
     rpc::{CundaSysT, LogDecoder},
 };
 
+pub trait FlutterWire {
+    /// Outbound data goes to the stream. Flutter side listens to this stream and
+    /// sends the bytes over BLE
+    #[flutter_rust_bridge::frb(sync)]
+    fn init(&mut self, sink: StreamSink<Vec<u8>>);
+
+    /// Incoming data read from BLE with flutter and we pass that data using a
+    /// function call towards rust side
+    #[allow(async_fn_in_trait)]
+    async fn rx_callback(
+        &self,
+        data: &[u8],
+    ) -> Result<(), ::frb_prpc_juggle::client_interface::FrbPostcardRpcError>;
+}
+
 pub struct FlutterClient {
-    inner: Client,
+    inner: PrpcClient,
     log_decoder: Option<LogDecoderDefmt>,
 }
 
-impl AsRef<Client> for FlutterClient {
-    fn as_ref(&self) -> &Client {
+impl AsRef<PrpcClient> for FlutterClient {
+    fn as_ref(&self) -> &PrpcClient {
         &self.inner
     }
 }
@@ -23,13 +38,15 @@ impl FlutterClient {
     #[flutter_rust_bridge::frb(sync)]
     pub fn new() -> Self {
         Self {
-            inner: Client::new(),
+            inner: PrpcClient::new(),
             log_decoder: None,
         }
     }
+}
 
+impl FlutterWire for FlutterClient {
     #[flutter_rust_bridge::frb(sync)]
-    pub fn init(&mut self, sink: StreamSink<Vec<u8>>) {
+    fn init(&mut self, sink: StreamSink<Vec<u8>>) {
         self.inner.init(Box::new(move |data| {
             log::trace!("Sending data from rust to flutter {:?}", data);
             if let Err(e) = sink.add(data) {
@@ -38,7 +55,7 @@ impl FlutterClient {
         }))
     }
 
-    pub async fn rx_callback(
+    async fn rx_callback(
         &self,
         data: &[u8],
     ) -> Result<(), ::frb_prpc_juggle::client_interface::FrbPostcardRpcError> {
@@ -96,8 +113,8 @@ impl DemoClientV1 {
     }
 }
 
-impl AsRef<Client> for DemoClientV1 {
-    fn as_ref(&self) -> &Client {
+impl AsRef<PrpcClient> for DemoClientV1 {
+    fn as_ref(&self) -> &PrpcClient {
         &self.0.as_ref()
     }
 }

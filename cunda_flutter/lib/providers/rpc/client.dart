@@ -211,8 +211,14 @@ FutureOr<FlutterClient> flutterClient(Ref ref, BluetoothDevice device) async {
 }
 
 @Riverpod(keepAlive: true, retry: noRetry)
+FutureOr<CundaDevice> cundaDeviceClient(Ref ref, BluetoothDevice device) async {
+  final client = await ref.watch(demoEsp32ClientProvider(device).future);
+  return client as CundaDevice;
+}
+
+@Riverpod(keepAlive: true, retry: noRetry)
 Future<DeviceId> deviceId(Ref ref, BluetoothDevice device) async {
-  final fc = await ref.watch(flutterClientProvider(device).future);
+  final fc = await ref.watch(cundaDeviceClientProvider(device).future);
   _log.fine("Calling getDeviceId RPC endpoint");
   return fc.getDeviceId(req: NoArg());
 }

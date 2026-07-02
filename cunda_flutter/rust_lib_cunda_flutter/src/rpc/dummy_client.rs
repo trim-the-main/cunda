@@ -95,7 +95,7 @@ impl protocol::cunda_common::CundaDevice for DummyFlutterProtocolClient {
         log::debug!("Get device id called");
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
         Ok(DeviceId::new(
-            "cunda",
+            "demo-esp32",
             1,
             1,
             "0.0.0",

@@ -113,7 +113,7 @@ pub struct EndpointHandle<'a> {
         &'a Mutex<Option<(PendingRpcResponseKey, oneshot::Sender<RpcResponseResult>)>>,
 }
 
-pub struct Client {
+pub struct PrpcClient {
     // Serialize RPC calls so only one is on the wire at a time.
     // Don't overwhelm the firmware.
     endpoint: tokio::sync::Mutex<EndpointCaller>,
@@ -126,7 +126,7 @@ pub struct Client {
     topics: RwLock<Vec<(Key, Box<dyn TopicSink>)>>,
 }
 
-impl Client {
+impl PrpcClient {
     pub fn new() -> Self {
         Self {
             endpoint: tokio::sync::Mutex::new(EndpointCaller {
@@ -164,13 +164,13 @@ impl Client {
     }
 }
 
-impl Default for Client {
+impl Default for PrpcClient {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Client {
+impl PrpcClient {
     pub async fn rx_callback(&self, data: &[u8]) -> Result<(), FrbPostcardRpcError> {
         log::trace!("Rust side received data {:?}", data);
         let mut acc = self.rx_accumulator.lock().await;
@@ -308,7 +308,7 @@ impl EndpointHandle<'_> {
     }
 }
 
-impl ClientEndpointInterface for Client {
+impl ClientEndpointInterface for PrpcClient {
     async fn call_rpc_endpoint<E: Endpoint>(
         &self,
         req: E::Request,
@@ -324,7 +324,7 @@ impl ClientEndpointInterface for Client {
     }
 }
 
-impl ClientTopicInterface for Client {
+impl ClientTopicInterface for PrpcClient {
     async fn subscribe<T: Topic>(&self, sink: Box<dyn TopicSink>) -> Result<(), FrbPostcardRpcError>
     where
         T::Message: DeserializeOwned,
@@ -352,7 +352,7 @@ impl ClientTopicInterface for Client {
 
 impl<T> ClientEndpointInterface for T
 where
-    T: AsRef<Client>,
+    T: AsRef<PrpcClient>,
 {
     fn call_rpc_endpoint<E: Endpoint>(
         &self,
@@ -368,7 +368,7 @@ where
 
 impl<C> ClientTopicInterface for C
 where
-    C: AsRef<Client>,
+    C: AsRef<PrpcClient>,
 {
     fn subscribe<T: Topic>(
         &self,
