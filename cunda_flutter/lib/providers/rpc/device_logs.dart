@@ -2,10 +2,11 @@ import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/defmt_log_translation.dart';
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/log_decoder.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
 import 'package:cunda_flutter/providers/package_registry_provider.dart';
-import 'package:cunda_flutter/providers/rpc/client.dart';
+import 'package:cunda_flutter/providers/rpc/base.dart';
+import 'package:cunda_flutter/providers/rpc/cunda_sys.dart';
 import 'package:cunda_flutter/providers/rpc/protocol.dart';
 import 'package:cunda_flutter/services/mayna/mayna_types.dart';
 import 'package:cunda_flutter/utils/riverpod_utils.dart';
@@ -28,7 +29,7 @@ class LogTopicEnabled extends _$LogTopicEnabled {
 
 @Riverpod(keepAlive: true, retry: noRetry)
 FutureOr<LogDecoder> logDecoder(Ref ref, BluetoothDevice device) async {
-  final client = await ref.watch(demoEsp32ClientProvider(device).future);
+  final client = await ref.watch(protocolClientProvider(device).future);
   return client as LogDecoder;
 }
 

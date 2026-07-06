@@ -1,3 +1,4 @@
+import 'package:cunda_flutter/pages/devices/demo_esp32/device.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
 import 'package:cunda_flutter/services/ble/ble.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
@@ -6,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cunda_flutter/pages/device/device.dart';
 import 'package:logging/logging.dart';
 
 import 'package:mockito/annotations.dart';
@@ -37,7 +37,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [bleServiceProvider.overrideWithValue(mockBleService)],
-          child: MaterialApp(home: DevicePage(device: mockDevice)),
+          child: MaterialApp(home: DemoEsp32DevicePage(device: mockDevice)),
         ),
       );
       _log.info("Pumped widget");
@@ -76,7 +76,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [bleServiceProvider.overrideWithValue(mockBleService)],
-          child: MaterialApp(home: DevicePage(device: mockDevice)),
+          child: MaterialApp(home: DemoEsp32DevicePage(device: mockDevice)),
         ),
       );
       await tester.pumpAndSettle();

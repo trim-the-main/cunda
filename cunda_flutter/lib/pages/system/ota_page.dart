@@ -1,6 +1,7 @@
-import 'package:cunda_flutter/pages/device/ota_section.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+
+import 'ota_section.dart';
 
 class OtaPage extends StatelessWidget {
   final BluetoothDevice device;

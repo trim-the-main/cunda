@@ -1,8 +1,9 @@
-import 'package:cunda_flutter/pages/device/device_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logging/logging.dart';
+
+import 'demo_esp32_view_model.dart';
 
 // ignore: unused_element
 final _log = Logger('BandwidthTabPage');
@@ -100,23 +101,19 @@ class _BandwidthSection extends StatelessWidget {
       children: [
         Text(
           title,
-          style: Theme.of(context)
-              .textTheme
-              .titleMedium
-              ?.copyWith(fontWeight: FontWeight.bold),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
-        Text(
-          subtitle,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(height: 12),
         Center(
           child: Text(
             throughput,
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontFamily: 'monospace',
-                  fontWeight: FontWeight.w500,
-                ),
+              fontFamily: 'monospace',
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
         const SizedBox(height: 12),

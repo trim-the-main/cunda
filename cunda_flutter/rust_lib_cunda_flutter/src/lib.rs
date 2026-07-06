@@ -1,5 +1,9 @@
+pub mod cunda_device_base;
 pub mod defmt_log_translation;
+pub mod devices;
 mod frb_generated;
+pub mod frb_mirrors;
+pub mod log_decoder;
 pub mod rpc;
 
 #[flutter_rust_bridge::frb(init)]

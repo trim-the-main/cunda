@@ -1,23 +1,7 @@
-use frb_prpc_juggle::client_interface::TopicSink;
-use serde::de::DeserializeOwned;
-
-use crate::defmt_log_translation::{DefmtLogEntry, LogDecodingError};
-use crate::frb_generated::StreamSink;
+pub use defmt_parser::Level;
 pub use frb_prpc_juggle::client_interface::FrbPostcardRpcError;
 pub use postcard_rpc::standard_icd::WireError;
 pub use postcard_rpc::standard_icd::{FrameTooLong, FrameTooShort};
-pub mod client;
-pub mod dummy_client;
-
-/// Interface for defmt log decoding.
-pub trait LogDecoder {
-    /// Load defmt table and location data to prepare for decoding.
-    fn init_log_decoder(&mut self, table_bytes: &[u8], loc_bytes: &[u8]);
-
-    /// Decode a raw defmt byte stream into structured log entries.
-    #[flutter_rust_bridge::frb(sync)]
-    fn decode_log(&self, bytes: &[u8]) -> Result<Vec<DefmtLogEntry>, LogDecodingError>;
-}
 
 #[flutter_rust_bridge::frb(mirror(FrameTooLong))]
 pub struct _FrameTooLong {
@@ -63,26 +47,11 @@ pub enum _FrbPostcardRpError {
     RpcError(WireError),
 }
 
-impl<T> TopicSink for StreamSink<T>
-where
-    T: DeserializeOwned,
-    T: Send + Sync,
-    T: crate::frb_generated::SseEncode,
-{
-    fn parse_and_add(&self, msg: &[u8]) -> Result<(), FrbPostcardRpcError> {
-        match postcard::from_bytes::<T>(msg) {
-            Ok(msg) => self.add(msg).map_err(|err| {
-                log::error!(
-                    "Error trying to send topic frame to from rust to dart {}",
-                    err
-                );
-                FrbPostcardRpcError::InternalError
-            }),
-            Err(err) => {
-                log::error!("Deserialization error {} on topic message", err);
-                Err(FrbPostcardRpcError::DeserializationError)
-            }
-        }
-    }
+#[flutter_rust_bridge::frb(mirror(Level))]
+pub enum _Level {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
 }
-protocol::cunda_common::v1::topics::define_topic_trait!(CundaSysT with StreamSink);

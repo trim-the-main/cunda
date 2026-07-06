@@ -350,9 +350,9 @@ impl ClientTopicInterface for PrpcClient {
     }
 }
 
-impl<T> ClientEndpointInterface for T
+impl<C> ClientEndpointInterface for C
 where
-    T: AsRef<PrpcClient>,
+    C: AsRef<PrpcClient>,
 {
     fn call_rpc_endpoint<E: Endpoint>(
         &self,

@@ -2,15 +2,6 @@ use serde::{Deserialize, Serialize};
 
 pub use defmt_parser::Level;
 
-#[flutter_rust_bridge::frb(mirror(Level))]
-pub enum _Level {
-    Trace,
-    Debug,
-    Info,
-    Warn,
-    Error,
-}
-
 #[derive(Debug, Clone)]
 pub struct DefmtLogEntry {
     pub level: Option<Level>,

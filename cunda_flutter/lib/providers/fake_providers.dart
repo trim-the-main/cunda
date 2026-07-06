@@ -1,24 +1,36 @@
+import 'dart:math';
+
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/devices/demo_esp32.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/devices/fake_dev.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/devices/mocks/mock_demo_esp32.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/log_decoder.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc.dart';
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc/client.dart';
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc/dummy_client.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common/v1/endpoints.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/devices/demo_esp32/v1/endpoints.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
-import 'package:cunda_flutter/providers/rpc/client.dart';
+import 'package:cunda_flutter/providers/rpc/base.dart';
+import 'package:cunda_flutter/providers/rpc/cunda_sys.dart';
 import 'package:cunda_flutter/providers/rpc/device_logs.dart';
-import 'package:cunda_flutter/providers/rpc/protocol.dart';
+import 'package:cunda_flutter/providers/rpc/devices/demo_esp32.dart';
 import 'package:cunda_flutter/services/ble/ble_fake_impl.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-final _dummyClients = <String, DummyFlutterProtocolClient>{};
+final _dummyClients = <String, Object>{};
 
-DummyFlutterProtocolClient _clientFor(BluetoothDevice device) {
-  return _dummyClients.putIfAbsent(
-    device.remoteId.str,
-    DummyFlutterProtocolClient.new,
-  );
+final List<Object Function()> possibleClientConstructors = [
+  FakeDevV1Client.new,
+  MockDemoV1Client.new,
+];
+
+Object _clientFor(BluetoothDevice device) {
+  final random = Random();
+  final f =
+      possibleClientConstructors[random.nextInt(
+        possibleClientConstructors.length,
+      )];
+  return _dummyClients.putIfAbsent(device.remoteId.str, f);
 }
 
 List<Override> fakeProviderOverrides() {

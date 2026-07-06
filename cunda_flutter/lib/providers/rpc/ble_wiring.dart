@@ -1,21 +1,12 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
 import 'package:async/async.dart';
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc/client.dart';
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common.dart';
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
-import 'package:cunda_flutter/providers/ble/ble_providers.dart';
-import 'package:cunda_flutter/services/ble/ble.dart';
-import 'package:cunda_flutter/utils/riverpod_utils.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/cunda_device_base.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:logging/logging.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-part 'client.g.dart';
-
-final _log = Logger('RpcClientProvider');
+final _log = Logger('BleWiring');
 const gattOverhead = 7;
 
 enum RpcUuid {
@@ -42,7 +33,10 @@ class NotRpcDeviceException implements Exception {
   NotRpcDeviceException({required this.notFound});
 }
 
-Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
+Future<CundaDeviceBase> bleWire(
+  BluetoothDevice device,
+  CundaDeviceBase base,
+) async {
   final timer = Stopwatch()..start();
   _log.fine("Setting up the Rpc client");
   final services = await device.discoverServices();
@@ -105,7 +99,6 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
     throw NotRpcDeviceException(notFound: RpcUuid.toClientAcked);
   }
   _log.fine("Creating Rpc client");
-  final client = FlutterClient();
 
   // Send data to rust ffi using the callback
   // It is important we wait for completion of the rxCallback,
@@ -117,7 +110,7 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
         toClientAcked.onValueReceived,
       ]).listen((data) async {
         _log.fine("rx from device: ${data.length} bytes");
-        await client.rxCallback(data: data);
+        await base.rxCallback(data: data);
       });
   device.cancelWhenDisconnected(rxStreamSub);
 
@@ -129,7 +122,7 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
   // different and `init` method takes in a StreamSink argument. So
   // long story short the stream is not generated in the rust code that
   // we write but rather in the flutter_rust_bridge generated code.
-  final txStreamSub = client.init().listen((data) async {
+  final txStreamSub = base.init().listen((data) async {
     _log.finest("tx to device: ${data.length} bytes");
     _log.finest("$data");
     final chunkSize = Platform.isLinux
@@ -180,58 +173,5 @@ Future<FlutterClient> _createRpcClientFor(BluetoothDevice device) async {
   _log.fine(
     "setting notifications took ${timer.elapsedMilliseconds} milliseconds",
   );
-  return client;
-}
-
-// Rpc client provider
-// We create rpc client object with keepAlive:true so that even if the
-// widgets don't need the client anymore we keep it alive. This doesn't
-// mean we keep it alive forever, we dispose it when the device disconnects.
-@Riverpod(keepAlive: true, retry: noRetry)
-FutureOr<FlutterClient> flutterClient(Ref ref, BluetoothDevice device) async {
-  _log.fine("Creating rpc client");
-
-  // We will be notified when connectionManager state changes. If disconnected we
-  // should not continue.
-  if (ref.watch(connectionManagerProvider(device)) ==
-      ConnectionTransitionState.disconnected) {
-    throw ConnectionLost();
-  }
-
-  final timer = Stopwatch()..start();
-  final client = await _createRpcClientFor(device);
-  _log.fine("Client creation took ${timer.elapsedMilliseconds} milliseconds");
-  timer.reset();
-  ref.onDispose(() {
-    _log.fine("Disposing rpc client");
-    client.dispose(); // calls drop on the rust side
-  });
-
-  return client;
-}
-
-@Riverpod(keepAlive: true, retry: noRetry)
-FutureOr<CundaDevice> cundaDeviceClient(Ref ref, BluetoothDevice device) async {
-  final client = await ref.watch(demoEsp32ClientProvider(device).future);
-  return client as CundaDevice;
-}
-
-@Riverpod(keepAlive: true, retry: noRetry)
-Future<DeviceId> deviceId(Ref ref, BluetoothDevice device) async {
-  final fc = await ref.watch(cundaDeviceClientProvider(device).future);
-  _log.fine("Calling getDeviceId RPC endpoint");
-  return fc.getDeviceId(req: NoArg());
-}
-
-@Riverpod(keepAlive: true, retry: noRetry)
-FutureOr<DemoClientV1> demoEsp32Client(Ref ref, BluetoothDevice device) async {
-  final client = await ref.watch(flutterClientProvider(device).future);
-  final deviceId = await ref.watch(deviceIdProvider(device).future);
-  if (deviceId.deviceType != DemoClientV1.cundaDeviceType() ||
-      deviceId.protocolVersion != DemoClientV1.cundaCommonProtocol()) {
-    throw Exception("Tried to initialize wrong client.");
-  }
-  final demoClient = DemoClientV1(fc: client);
-  demoClient.approveFirmware(req: NoArg());
-  return demoClient;
+  return base;
 }

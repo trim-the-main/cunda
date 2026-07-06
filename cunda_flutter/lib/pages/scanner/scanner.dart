@@ -1,8 +1,9 @@
 import 'dart:ui';
 
 import 'package:collection/collection.dart';
-import 'package:cunda_flutter/pages/device/device.dart';
-import 'package:cunda_flutter/providers/rpc/client.dart';
+import 'package:cunda_flutter/pages/devices/demo_esp32/device.dart';
+import 'package:cunda_flutter/pages/devices/fake_dev/device.dart';
+import 'package:cunda_flutter/providers/rpc/base.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -185,7 +186,15 @@ class ScanResultCard extends ConsumerWidget {
       case ("demo-esp32", 1):
         {
           MaterialPageRoute route = MaterialPageRoute(
-            builder: (context) => DevicePage(device: device),
+            builder: (context) => DemoEsp32DevicePage(device: device),
+            settings: RouteSettings(name: '/connection'),
+          );
+          Navigator.of(context).push(route);
+        }
+      case ("fake-dev", <= 2):
+        {
+          MaterialPageRoute route = MaterialPageRoute(
+            builder: (context) => FakeDevicePage(device: device),
             settings: RouteSettings(name: '/connection'),
           );
           Navigator.of(context).push(route);

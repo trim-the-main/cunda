@@ -1,5 +1,5 @@
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/devices/demo_esp32/v1/types.dart';
-import 'package:cunda_flutter/providers/rpc/protocol.dart';
+import 'package:cunda_flutter/pages/devices/demo_esp32/demo_esp32_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

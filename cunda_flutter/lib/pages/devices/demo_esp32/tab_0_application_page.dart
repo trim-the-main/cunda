@@ -2,13 +2,15 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/devices/demo_esp32/v1/types.dart';
-import 'package:cunda_flutter/providers/rpc/protocol.dart';
+import 'package:cunda_flutter/providers/rpc/devices/demo_esp32.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:logging/logging.dart';
+
+import 'demo_esp32_view_model.dart';
 
 final _log = Logger('ApplicationTabPage');
 
@@ -167,7 +169,7 @@ class _GpioSectionState extends ConsumerState<GpioSection> {
       next.whenData((value) {
         final time = DateFormat('Hms').format(value.$1);
         _buttonEventOutput.sink.add(
-          "$time Pressed for ${value.$2.pressTimeInMs} ms  ",
+          "$time Pressed for ${value.$2.pressTimeInMs} ms",
         );
       });
     });

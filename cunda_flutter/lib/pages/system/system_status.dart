@@ -1,10 +1,10 @@
 import 'dart:io';
 
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common/v1/types.dart';
-import 'package:cunda_flutter/pages/device/device_view_model.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
-import 'package:cunda_flutter/providers/rpc/client.dart';
-import 'package:cunda_flutter/providers/rpc/protocol.dart';
+import 'package:cunda_flutter/providers/rpc/base.dart';
+import 'package:cunda_flutter/providers/rpc/ble_wiring.dart';
+import 'package:cunda_flutter/providers/rpc/cunda_sys.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
 import 'package:cunda_flutter/utils/rust_type_helpers.dart';
 import 'package:flutter/material.dart';
@@ -12,16 +12,16 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logging/logging.dart';
 
-final _log = Logger('SystemTabPage');
+final _log = Logger('SystemStatus');
 
-class SystemTabPage extends StatelessWidget {
-  const SystemTabPage({super.key, required this.device});
+class SystemStatus extends StatelessWidget {
+  const SystemStatus({super.key, required this.device});
 
   final BluetoothDevice device;
 
   @override
   Widget build(BuildContext context) {
-    _log.fine("Building status tab page");
+    _log.fine("Building system status widget");
     final List<Widget> statusTiles = [
       BluetoothConnectionStatusCard(device: device),
       DeviceHealth(device: device),

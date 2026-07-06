@@ -1,68 +1,65 @@
-// State that only the device page widgets depend on
-
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common/v1/types.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/devices/demo_esp32/v1/types.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
-import 'package:cunda_flutter/providers/rpc/protocol.dart';
+import 'package:cunda_flutter/providers/rpc/devices/demo_esp32.dart';
 import 'package:cunda_flutter/utils/riverpod_utils.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:logging/logging.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-part "device_view_model.g.dart";
+part "demo_esp32_view_model.g.dart";
 
-final _log = Logger('DeviceViewModel');
+final _log = Logger('DemoEsp32ViewModel');
 
-@riverpod
-Stream<Duration> pingStream(Ref ref, BluetoothDevice device) async* {
-  final sysD = await ref.watch(sysEndpointsProvider(device).future);
-  Stopwatch stopwatch = Stopwatch();
-  while (true) {
-    stopwatch.start();
-    _log.fine("Started the clock, pinging");
-    await sysD.pingEndpoint(req: NoArg());
-    stopwatch.stop();
-    if (!ref.mounted) {
-      _log.fine(
-        "Ping took ${stopwatch.elapsed.inMilliseconds}. But not yielding as ref.mounted is false",
-      );
-      break;
-    }
-    _log.fine("Ping took ${stopwatch.elapsed.inMilliseconds}. Yielding this");
-    yield stopwatch.elapsed;
-    stopwatch.reset();
-    await Future.delayed(Duration(seconds: 1));
-    if (!ref.mounted) {
-      break;
-    }
+// A simple wrapper around button events stream. We attach timestamps
+// to the button events.
+@Riverpod(keepAlive: true, retry: noRetry)
+Stream<(DateTime, ButtonEvent)> gpioButtonEvents(
+  Ref ref,
+  BluetoothDevice device,
+) async* {
+  final eDispatcher = await ref.watch(appEndpointsProvider(device).future);
+  final tDispatcher = await ref.watch(appTopicsProvider(device).future);
+  final buttonEventsStream = tDispatcher.createButtonEventsStream();
+
+  eDispatcher.startButtonEventsTopic(req: NoArg());
+  ref.onCancel(() {
+    _log.warning("Stop button events stream, we got canceled");
+    eDispatcher.stopButtonEventsTopic(req: NoArg());
+  });
+  ref.onResume(() {
+    _log.warning("Resume button events stream");
+    eDispatcher.startButtonEventsTopic(req: NoArg());
+  });
+  await for (final event in buttonEventsStream) {
+    _log.fine("Yielding button event: $event");
+    yield (DateTime.now(), event);
   }
 }
 
 @Riverpod(keepAlive: true, retry: noRetry)
-Stream<SysStats> systemStatsStream(Ref ref, BluetoothDevice device) async* {
-  _log.info("System stats stream");
-  final sysD = await ref.watch(sysEndpointsProvider(device).future);
+class ApplicationSettings extends _$ApplicationSettings {
+  @override
+  FutureOr<ApplSettings> build(BluetoothDevice device) async {
+    final appD = await ref.watch(appEndpointsProvider(device).future);
+    _log.fine("Calling getApplSettings");
+    return appD.getApplSettings(req: NoArg());
+  }
 
-  // Subscribe to the topic
-  final tDispatcher = await ref.watch(sysTopicsProvider(device).future);
-  final sysStatsStream = tDispatcher.createSysStatsTopicStream();
-
-  await sysD.startSysStatsTopic(req: NoArg());
-  ref.onCancel(() async {
-    _log.fine("Stop system stats stream");
-    await sysD.stopSysStatsTopic(req: NoArg());
-  });
-  ref.onResume(() async {
-    _log.fine("Resume system stats stream");
-    await sysD.startSysStatsTopic(req: NoArg());
-  });
-  ref.onDispose(() {
-    _log.fine("Disposing system stats stream");
-  });
-  yield* sysStatsStream;
+  void save(ApplSettings newSettings) async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(
+      () => ref
+          .read(appEndpointsProvider(device).future)
+          .then(
+            (appD) => appD
+                .setApplSettings(req: newSettings)
+                .then((_) => appD.getApplSettings(req: NoArg())),
+          ),
+    );
+  }
 }
 
 /// Downstream bandwidth: subscribes to BandwidthTestTopic and measures incoming bytes/sec.
