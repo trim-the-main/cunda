@@ -1,0 +1,13 @@
+[target.xtensa-esp32-none-elf]
+runner = "espflash flash --monitor --chip esp32 --log-format defmt --partition-table partitions_two_ota_coredump.csv --bootloader bootloader_with_ota/bootloader.bin"
+
+[env]
+DEFMT_LOG = "info"
+
+[build]
+rustflags = ["-C", "link-arg=-nostartfiles", "-Z", "stack-protector=all", "-C", "link-arg=-Wl,-Map=target/firmware.map"]
+
+target = "xtensa-esp32-none-elf"
+
+[unstable]
+build-std = ["alloc", "core"]

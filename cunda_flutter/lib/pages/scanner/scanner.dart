@@ -183,7 +183,7 @@ class ScanResultCard extends ConsumerWidget {
       return;
     }
     switch ((deviceId.deviceType, deviceId.protocolVersion)) {
-      case ("demo-esp32", 1):
+      case ("demo_esp32", 1):
         {
           MaterialPageRoute route = MaterialPageRoute(
             builder: (context) => DemoEsp32DevicePage(device: device),

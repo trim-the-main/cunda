@@ -1,0 +1,10 @@
+[language-server.rust-analyzer]
+environment = { "RUSTUP_TOOLCHAIN" = "stable" }
+
+[language-server.rust-analyzer.config.cargo]
+allTargets = false
+target = "xtensa-esp32-none-elf"
+extraEnv = { "RUSTUP_TOOLCHAIN" = "esp" }
+
+[language-server.rust-analyzer.config.check]
+extraEnv = { "RUSTUP_TOOLCHAIN" = "esp" }

@@ -26,8 +26,8 @@ fn embed_git_hash() {
     };
 
     println!("cargo:rustc-env=GIT_HASH={}", git_hash);
-    println!("cargo:rerun-if-changed=../.git/HEAD");
-    println!("cargo:rerun-if-changed=../.git/index");
+    println!("cargo:rerun-if-changed=../../.git/HEAD");
+    println!("cargo:rerun-if-changed=../../.git/index");
 }
 
 fn linker_be_nice() {

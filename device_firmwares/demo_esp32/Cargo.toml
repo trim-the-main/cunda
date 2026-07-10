@@ -1,17 +1,17 @@
 [package]
-name = "firmware"
+name = "demo_esp32"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.90"
 
 [[bin]]
-name = "firmware"
+name = "demo_esp32"
 path = "./src/bin/main.rs"
 
 [dependencies]
 bt-hci = "0.6.0"
 const_format = "0.2.36"
-cobs_accumulator = { path = "../cobs_accumulator" }
+cobs_accumulator = { path = "../../cobs_accumulator" }
 cordyceps = "0.3.4"
 critical-section = "1.2.0"
 defmt = "1.0.1"
@@ -58,13 +58,13 @@ minicbor-adapters = "0.0.8"
 minicbor-derive = "0.19.2"
 nb = "1.1.0"
 postcard = { version = "1.1.3", features = ["alloc"] }
-postcard-rpc-ble = { path = "../postcard-rpc-ble" }
+postcard-rpc-ble = { path = "../../postcard-rpc-ble" }
 postcard-rpc = { version = "0.12.1", features = [
   "cobs",
   "defmt",
   "embedded-io-async-0_6-server",
 ] }
-protocol = { path = "../protocol" }  # Endpoint and Topic definitions
+protocol = { path = "../../protocol" }  # Endpoint and Topic definitions
 sequential-storage = { version = "7.1.0", features = [
   "alloc",
   "defmt",

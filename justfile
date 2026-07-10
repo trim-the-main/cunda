@@ -11,25 +11,34 @@ default:
 # Firmware
 # ==============================================================================
 
+_check-device device:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -d "device_firmwares/{{ device }}" ]; then
+        echo "Error: device firmware does not exist for '{{ device }}'" >&2
+        exit 1
+    fi
+
 # Build the firmware in debug mode
-[working-directory('firmware')]
-build-firmware-debug:
-    DEFMT_LOG=info,firmware=debug cargo build
+build-firmware-debug device: (_check-device device)
+    #!/usr/bin/env bash
+    set -euo pipefail
+    (
+      cd "device_firmwares/{{ device }}"
+      DEFMT_LOG=info,postcard_rpc_ble=debug,{{ device }}=debug cargo build
+    )
 
 # Build the firmware in release mode
-[working-directory('firmware')]
-build-firmware-release:
-    cargo build --release
+build-firmware-release device: (_check-device device)
+    (cd device_firmwares/{{ device }} && cargo build --release)
 
 # Run the firmware in debug mode (uses espflash runner from .cargo/config.toml)
-[working-directory('firmware')]
-run-firmware-debug:
-    DEFMT_LOG=info,firmware=debug,postcard_rpc_ble=debug cargo run
+run-firmware-debug device: (_check-device device)
+    (cd device_firmwares/{{ device }} && DEFMT_LOG=info,postcard_rpc_ble=debug,{{ device }}=debug cargo run)
 
 # Run the firmware in release mode
-[working-directory('firmware')]
-run-firmware-release:
-    cargo run --release
+run-firmware-release device: (_check-device device)
+    (cd device_firmwares/{{ device }} && cargo run --release)
 
 # ==============================================================================
 # Firmware Size Analysis
@@ -37,50 +46,75 @@ run-firmware-release:
 
 # Path to ESP toolchain binutils
 esp_tools := env('HOME') / ".rustup/toolchains/esp/xtensa-esp-elf/esp-15.2.0_20250920/xtensa-esp-elf/bin"
-elf := "firmware/target/xtensa-esp32-none-elf/release/firmware"
+
+_check-elf-exists device type='release': (_check-device device)
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f "device_firmwares/{{ device }}/target/xtensa-esp32-none-elf/{{ type }}/{{ device }}" ]; then
+        echo "Error: device {{ type }} elf file does not exists for '{{ device }}'. Try building it." >&2
+        exit 1
+    fi
 
 # Show section sizes (.text, .rodata, .data, .bss, etc.)
-size-sections:
-    {{esp_tools}}/xtensa-esp32-elf-size -A {{elf}}
+size-sections device type='release': (_check-elf-exists device type)
+    {{ esp_tools }}/xtensa-esp32-elf-size -A device_firmwares/{{ device }}/target/xtensa-esp32-none-elf/{{ type }}/{{ device }}
 
 # Show the N largest code symbols (default: 50)
-size-symbols n='50':
-    {{esp_tools}}/xtensa-esp32-elf-nm --size-sort -S --radix=d {{elf}} | rustfilt | grep ' [tT] ' | tail -{{n}}
+[working-directory('device_firmwares')]
+size-symbols device n='50' type='release': (_check-elf-exists device type)
+    {{ esp_tools }}/xtensa-esp32-elf-nm --size-sort -S --radix=d {{ device }}/target/xtensa-esp32-none-elf/{{ type }}/{{ device }} | rustfilt | grep ' [tT] ' | tail -{{ n }}
 
 # Aggregate code size by crate/module
-size-crates:
-    {{esp_tools}}/xtensa-esp32-elf-nm --size-sort -S --radix=d {{elf}} \
+size-crates device type='release': (_check-elf-exists device type)
+    {{ esp_tools }}/xtensa-esp32-elf-nm --size-sort -S --radix=d device_firmwares/{{ device }}/target/xtensa-esp32-none-elf/{{ type }}/{{ device }} \
       | rustfilt \
       | grep ' [tT] ' \
       | awk '{size=$2; name=$4; split(name, parts, "::"); crate=parts[1]; sizes[crate]+=size} END {for (c in sizes) printf "%8d  %s\n", sizes[c], c}' \
       | sort -rn
 
 # Source file attribution via bloaty (requires bloaty + debug info)
-size-bloaty n='50':
-    bloaty {{elf}} -d compileunits -n {{n}}
+size-bloaty device n='50' type='release': (_check-elf-exists device type)
+    bloaty device_firmwares/{{ device }}/target/xtensa-esp32-none-elf/{{ type }}/{{ device }} -d compileunits -n {{ n }}
 
 # Differential size analysis between two ELF binaries
 size-diff old new:
-    bloaty {{new}} -- {{old}} -d compileunits
+    bloaty {{ new }} -- {{ old }} -d compileunits
 
-# Show Future/async state machine enum sizes, sorted by total size (requires nightly -Zprint-type-sizes)
-[working-directory('firmware')]
-size-futures filter='':
-    RUSTFLAGS="-Zprint-type-sizes" cargo build --release 2>&1 \
-      | grep 'print-type-size' \
-      | grep -i '{{filter}}' \
-      | sort -t: -k2 -rn
+# Show Future/async state machine enum sizes, sorted by total size (requires nightly -Zprint-type-sizes) for release build
+size-futures device filter='': (_check-elf-exists device "release")
+    (   cd device_firmwares/{{ device }} \
+        && RUSTFLAGS="-Zprint-type-sizes" cargo build --release 2>&1 \
+           | grep 'print-type-size' \
+           | grep -i '{{ filter }}' \
+           | sort -t: -k2 -rn
+    )
 
+# Show Future/async state machine enum sizes, sorted by total size (requires nightly -Zprint-type-sizes) for debug build
+size-futures-debug device filter='': (_check-elf-exists device "debug")
+    (   cd device_firmwares/{{ device }} \
+        && RUSTFLAGS="-Zprint-type-sizes" \
+           DEFMT_LOG=info,postcard_rpc_ble=debug,{{ device }}=debug cargo build 2>&1 \
+           | grep 'print-type-size' \
+           | grep -i '{{ filter }}' \
+           | sort -t: -k2 -rn
+    )
 # ==============================================================================
 # Packaging
 # ==============================================================================
 
 # Build a .mayna distribution package from the release firmware ELF
-package-firmware: build-firmware-release
+package-firmware device: (build-firmware-release device)
     cargo run --manifest-path mayna/Cargo.toml -- create \
-      --elf {{elf}} \
+      --elf device_firmwares/{{ device }}/target/xtensa-esp32-none-elf/release/{{ device }} \
       --chip esp32 \
-      --bootloader firmware/bootloader_with_ota/bootloader.bin \
+      --bootloader device_firmwares/{{ device }}/bootloader_with_ota/bootloader.bin \
+      --output .
+
+package-firmware-debug device: (build-firmware-debug device)
+    cargo run --manifest-path mayna/Cargo.toml -- create \
+      --elf device_firmwares/{{ device }}/target/xtensa-esp32-none-elf/debug/{{ device }} \
+      --chip esp32 \
+      --bootloader {{ device }}/bootloader_with_ota/bootloader.bin \
       --output .
 
 # ==============================================================================

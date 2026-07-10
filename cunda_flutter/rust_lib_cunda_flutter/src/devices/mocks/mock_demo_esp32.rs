@@ -32,7 +32,7 @@ impl MockDemoV1Client {
         log::info!("Creating a new fake client");
         let log_table: Vec<(Level, &'static str)> = vec![];
         Self {
-            mc: MockClient::new("demo-esp32", 1, 1, log_table),
+            mc: MockClient::new("demo_esp32", 1, 1, log_table),
             current_application_settings: Mutex::new(ApplSettings {
                 led_blink_duration_ms: 400,
             }),

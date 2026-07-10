@@ -11,7 +11,6 @@ use embassy_executor::Spawner;
 use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
-use esp_hal::gpio::{Input, InputConfig, Level, Output, OutputConfig};
 use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::system::Stack;
 use esp_hal::timer::timg::TimerGroup;
@@ -22,7 +21,7 @@ use maitake_sync::Mutex;
 
 extern crate alloc;
 
-use firmware::ble::ble_init;
+use nokta::ble::ble_init;
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
@@ -56,7 +55,7 @@ async fn main(spawner: Spawner) -> ! {
     static SHA: StaticCell<Mutex<esp_hal::sha::Sha<'static>>> = StaticCell::new();
     let sha = SHA.init(Mutex::new(esp_hal::sha::Sha::new(peripherals.SHA)));
     let flash = esp_storage::FlashStorage::new(peripherals.FLASH).multicore_auto_park();
-    firmware::storage::init(flash, sha).await;
+    nokta::storage::init(flash, sha).await;
 
     static APP_CORE_STACK: StaticCell<Stack<16384>> = StaticCell::new();
     let app_core_stack = APP_CORE_STACK.init(Stack::new());
@@ -75,15 +74,7 @@ async fn main(spawner: Spawner) -> ! {
         },
     );
 
-    // Hardware references to pass on to BleFrontend
-    static BUTTON: StaticCell<Mutex<Input<'static>>> = StaticCell::new();
-    let button = BUTTON.init(Mutex::new(Input::new(
-        peripherals.GPIO0,
-        InputConfig::default(),
-    )));
-    let led = Output::new(peripherals.GPIO2, Level::Low, OutputConfig::default());
-
-    ble_init(spawner, peripherals.BT, button, led, logger).await;
+    ble_init(spawner, peripherals.BT, logger).await;
     defmt::info!("BLE tasks are spawned, main thread is sleep looping.");
 
     loop {
