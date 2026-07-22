@@ -4,11 +4,11 @@ use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Schema, Debug, Clone)]
-pub struct ApplSettings {
+pub struct NoktaSettings {
     pub led_blink_duration_ms: u32,
 }
 
-impl ApplSettings {
+impl NoktaSettings {
     pub const fn new() -> Self {
         Self {
             led_blink_duration_ms: 100,
@@ -16,7 +16,7 @@ impl ApplSettings {
     }
 }
 
-impl Default for ApplSettings {
+impl Default for NoktaSettings {
     fn default() -> Self {
         Self {
             led_blink_duration_ms: 100,

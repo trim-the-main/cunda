@@ -8,9 +8,9 @@ pub(crate) async fn get_appl_settings(
     _context: &mut DispatchContext,
     _header: VarHeader,
     _rqst: types::NoArg,
-) -> types::ApplSettings {
+) -> types::NoktaSettings {
     defmt::debug!("Handling get_appl_settings");
-    let mut a_settings = types::ApplSettings::new();
+    let mut a_settings = types::NoktaSettings::new();
     match crate::storage::APP_CONFIG.get().await {
         Ok(a) => a_settings.led_blink_duration_ms = a.led_blink_duration,
         _ => {}
@@ -21,7 +21,7 @@ pub(crate) async fn get_appl_settings(
 pub(crate) async fn set_appl_settings(
     _context: &mut DispatchContext,
     _header: VarHeader,
-    rqst: types::ApplSettings,
+    rqst: types::NoktaSettings,
 ) -> types::EmptyRes {
     defmt::debug!("Handling set_appl_settings");
     let mut new_config = crate::storage::ApplicationConfig::default();

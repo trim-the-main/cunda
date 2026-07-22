@@ -4,15 +4,15 @@ use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Schema, Debug, Clone)]
-pub struct ApplSettings {}
+pub struct TirbodSettings {}
 
-impl ApplSettings {
+impl TirbodSettings {
     pub const fn new() -> Self {
         Self {}
     }
 }
 
-impl Default for ApplSettings {
+impl Default for TirbodSettings {
     fn default() -> Self {
         Self {}
     }

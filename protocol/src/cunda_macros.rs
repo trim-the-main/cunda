@@ -79,7 +79,9 @@ macro_rules! _create_topic_definition_macro {
             #[macro_export]
             macro_rules! [<_define_topic_trait_imp_ $trait_name>] {
                 ($trait_name with $d sink_type:ident) => {
+                    #[::flutter_rust_bridge::frb]
                     pub trait $trait_name : ::frb_prpc_juggle::client_interface::ClientTopicInterface {
+                        fn [<__force_translation_of_ $trait_name:snake>]() {}
                         $(
                             $(#[$meta])?
                             async fn [<create_ $tp_name:snake _stream>](

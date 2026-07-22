@@ -10,8 +10,8 @@ use super::types::*;
 endpoints_for_cunda! {
     list = APPL_ENDPOINTS;
     trait_name = TirbodEndpoints;
-    | EndpointTy              | RequestTy         | ResponseTy   | Path                        | Cfg |
-    | ----------              | ---------         | ----------   | ----                        | --- |
-    | GetApplSettings         | NoArg             | ApplSettings |"get_appl_settings"          |     |
-    | SetApplSettings         | ApplSettings      | EmptyRes     |"set_appl_settings"          |     |
+    | EndpointTy              | RequestTy         | ResponseTy     | Path                        | Cfg |
+    | ----------              | ---------         | ----------     | ----                        | --- |
+    | GetApplSettings         | NoArg             | TirbodSettings |"get_appl_settings"          |     |
+    | SetApplSettings         | TirbodSettings    | EmptyRes       |"set_appl_settings"          |     |
 }
