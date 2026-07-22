@@ -8,6 +8,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'demo_esp32.g.dart';
 
+// ignore: unused_element
 final _log = Logger('DemoEsp32Provider');
 
 @Riverpod(keepAlive: true, retry: noRetry)

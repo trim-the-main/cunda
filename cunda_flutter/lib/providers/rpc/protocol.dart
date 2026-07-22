@@ -9,6 +9,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'protocol.g.dart';
 
+// ignore: unused_element
 final _log = Logger('ProtocolProvider');
 
 // This is the downstream protocol client that can return any client type that wraps the Base

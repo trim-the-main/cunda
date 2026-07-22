@@ -10,6 +10,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 const _fakeBle = bool.fromEnvironment('FAKE_BLE');
 
+// ignore: unused_element
 final _log = Logger('CundaMain');
 
 Future<void> main() async {
