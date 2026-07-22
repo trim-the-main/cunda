@@ -1,24 +1,16 @@
 import 'package:cunda_flutter/pages/system/cunda_common_page_components.dart';
+import 'package:cunda_flutter/pages/system/system_status.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:logging/logging.dart';
 
-import 'tab_0_application_page.dart';
-import 'tab_1_system_page.dart';
-import 'tab_2_settings_page.dart';
-import 'tab_3_bandwidth_page.dart';
-
-// ignore: unused_element
-final _log = Logger('DemoEsp32DevicePage');
-
-class DemoEsp32DevicePage extends StatelessWidget {
+class NoktaDevicePage extends StatelessWidget {
   final BluetoothDevice device;
-  const DemoEsp32DevicePage({super.key, required this.device});
+  const NoktaDevicePage({super.key, required this.device});
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 4,
+      length: 2,
       child: Scaffold(
         appBar: CundaDeviceAppBar(
           device: device,
@@ -27,17 +19,13 @@ class DemoEsp32DevicePage extends StatelessWidget {
             tabs: [
               Tab(text: "Application"),
               Tab(text: "System"),
-              Tab(text: "Settings"),
-              Tab(text: "Bandwidth"),
             ],
           ),
         ),
         body: TabBarView(
           children: [
-            ApplicationTabPage(device: device),
-            SystemTabPage(device: device),
-            SettingsTabPage(device: device),
-            BandwidthTabPage(device: device),
+            Center(child: Text("Nokta Application Page")),
+            SystemStatus(device: device),
           ],
         ),
       ),

@@ -5,19 +5,20 @@ use frb_prpc_juggle::client_interface::{
     ClientEndpointInterface, ClientTopicInterface, FrbPostcardRpcError, TopicSink,
 };
 use postcard_rpc::Topic;
-use protocol::{
-    cunda_common::v1::{endpoints::*, topics::*},
-    devices::demo_esp32::v1::{endpoints::*, topics::*, types::*},
-};
 use serde::de::DeserializeOwned;
 use tokio::sync::Mutex;
 
-use super::super::demo_esp32::DemoAppTopics;
 use crate::{
     defmt_log_translation::{DefmtLogEntry, LogDecodingError},
     devices::mocks::{base::MockClient, helpers::PeriodicTopicOutput},
     frb_generated::StreamSink,
     rpc::CundaSysT,
+};
+
+use super::super::demo_esp32::DemoAppTopics;
+use protocol::{
+    cunda_common::v1::{endpoints::*, topics::*},
+    devices::demo_esp32::v1::{endpoints::*, topics::*, types::*},
 };
 
 #[flutter_rust_bridge::frb(opaque)]

@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/devices/demo_esp32.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/devices/fake_dev.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/devices/mocks/mock_demo_esp32.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/devices/mocks/mock_nokta.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/devices/mocks/mock_tirbod.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/log_decoder.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common.dart';
@@ -22,6 +24,8 @@ final _dummyClients = <String, Object>{};
 final List<Object Function()> possibleClientConstructors = [
   FakeDevV1Client.new,
   MockDemoV1Client.new,
+  MockNoktaV1Client.new,
+  MockTirbodV1Client.new,
 ];
 
 Object _clientFor(BluetoothDevice device) {

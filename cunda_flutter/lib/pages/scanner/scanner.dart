@@ -3,6 +3,8 @@ import 'dart:ui';
 import 'package:collection/collection.dart';
 import 'package:cunda_flutter/pages/devices/demo_esp32/device.dart';
 import 'package:cunda_flutter/pages/devices/fake_dev/device.dart';
+import 'package:cunda_flutter/pages/devices/nokta/home.dart';
+import 'package:cunda_flutter/pages/devices/tirbod/home.dart';
 import 'package:cunda_flutter/providers/rpc/base.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
 import 'package:flutter/material.dart';
@@ -187,6 +189,22 @@ class ScanResultCard extends ConsumerWidget {
         {
           MaterialPageRoute route = MaterialPageRoute(
             builder: (context) => DemoEsp32DevicePage(device: device),
+            settings: RouteSettings(name: '/connection'),
+          );
+          Navigator.of(context).push(route);
+        }
+      case ("nokta", 1):
+        {
+          MaterialPageRoute route = MaterialPageRoute(
+            builder: (context) => NoktaDevicePage(device: device),
+            settings: RouteSettings(name: '/connection'),
+          );
+          Navigator.of(context).push(route);
+        }
+      case ("tirbod", 1):
+        {
+          MaterialPageRoute route = MaterialPageRoute(
+            builder: (context) => TirbodDevicePage(device: device),
             settings: RouteSettings(name: '/connection'),
           );
           Navigator.of(context).push(route);
