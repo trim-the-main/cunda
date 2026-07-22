@@ -1,13 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:logging/logging.dart';
 
 final log = Logger('BleDeviceExtension');
-
-enum ConnectionTransition { noTransition, connecting, disconnecting }
-
-final Map<DeviceIdentifier, ValueNotifier<ConnectionTransition>> _transitions =
-    {};
 
 extension Extra on BluetoothDevice {
   String get chosenName {
