@@ -28,7 +28,7 @@ macro_rules! topics_for_cunda {
     (
         list = $list_name:ident;
         trait_name = $trait_name:ident;
-        path = $p:path;
+        full_mod_path_for_msg_types = $p:path;
         | TopicTy        | MessageTy                                | Path              | $( Cfg           |)?
         | $(-)*          | $(-)*                                    | $(-)*             | $($(-)*          |)?
       $(| $tp_name:ident | $msg_ty:tt $(< $($msg_lt:lifetime),+ >)? | $path_str:literal | $($meta:meta)? $(|)?)*

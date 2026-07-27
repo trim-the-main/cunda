@@ -6,7 +6,7 @@ pub const TOPICS: postcard_rpc::TopicMap = crate::merge_topic_lists!(
 topics_for_cunda! {
     list = APPL_TOPICS;
     trait_name = TirbodTopics;
-    path = devices::tirbod::v1::topics;
+    full_mod_path_for_msg_types = devices::tirbod::v1::topics;
     | TopicTy            | MessageTy             | Path                   | Cfg |
     | -------            | ---------             | ----                   | --- |
 }

@@ -8,7 +8,7 @@ pub use crate::devices::demo_esp32::v1::types::{BandwidthTestTopicData, ButtonEv
 topics_for_cunda! {
     list = APPL_TOPICS;
     trait_name = DemoAppTopics;
-    path = devices::demo_esp32::v1::topics;
+    full_mod_path_for_msg_types  = devices::demo_esp32::v1::topics;
     | TopicTy            | MessageTy             | Path                   | Cfg |
     | -------            | ---------             | ----                   | --- |
     | ButtonEvents       | ButtonEvent           | "button_events"        |     |
