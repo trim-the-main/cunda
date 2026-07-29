@@ -15,7 +15,7 @@ cunda_flutter/pubspec.lock
 cunda_flutter/rust_lib_cunda_flutter/Cargo.lock
 protocol/Cargo.lock
 frb_prpc_juggle/Cargo.lock
-firmware/Cargo.lock
+device_firmwares/*/Cargo.lock
 cobs_accumulator/Cargo.lock
 postcard-rpc-ble/Cargo.lock
 mayna/Cargo.lock
