@@ -19,6 +19,7 @@ device_firmwares/*/Cargo.lock
 cobs_accumulator/Cargo.lock
 postcard-rpc-ble/Cargo.lock
 mayna/Cargo.lock
+nmea_ubx_gps/Cargo.lock
 
 # FLUTTER_RUST_BRIDGE_CODEGEN generated .gitignore
 
