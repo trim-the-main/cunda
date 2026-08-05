@@ -17,7 +17,7 @@ use crate::{
 
 use super::super::demo_esp32::DemoAppTopics;
 use protocol::{
-    cunda_common::v1::{endpoints::*, topics::*},
+    cunda_common::v1::{endpoints::*, topics::sys::*},
     devices::demo_esp32::v1::{endpoints::*, topics::*, types::*},
 };
 

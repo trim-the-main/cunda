@@ -1,6 +1,6 @@
 pub const TOPICS: postcard_rpc::TopicMap = crate::merge_topic_lists!(
     APPL_TOPICS,
-    crate::cunda_common::v1::topics::CUNDA_SYS_TOPICS
+    crate::cunda_common::v1::topics::sys::CUNDA_SYS_TOPICS
 );
 
 topics_for_cunda! {

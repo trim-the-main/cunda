@@ -8,12 +8,15 @@ use frb_prpc_juggle::client_interface::{
     ClientEndpointInterface, ClientTopicInterface, FrbPostcardRpcError, TopicSink,
 };
 use postcard_rpc::{Key, Topic};
-use protocol::cunda_common::v1::{endpoints::*, topics::*, types};
+use protocol::cunda_common::v1::topics::gps::{ParsedGpsTopic, RawNmeaTopic};
+use protocol::cunda_common::v1::types::{GpsDataWire, RawNmea0183Sentence};
+use protocol::cunda_common::v1::{endpoints::*, topics::sys::*, types};
 use rand::Rng;
 use serde::de::DeserializeOwned;
 use tokio::sync::Mutex;
 
 use super::helpers;
+use crate::rpc::CundaGpsT;
 use crate::{
     defmt_log_translation::{DefmtLogEntry, LogDecodingError},
     frb_generated::StreamSink,
@@ -179,6 +182,71 @@ impl CundaSysE for MockClient {
         Ok(OtaResult::Restarting)
     }
 }
+impl CundaGpsE for MockClient {
+    async fn start_raw_nmea_topic(&self, _req: NoArg) -> Result<EmptyRes, FrbPostcardRpcError> {
+        log::debug!("Start raw nmea topic called");
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        if let Some(running) = self
+            .streams_running_status
+            .lock()
+            .await
+            .get(&RawNmeaTopic::TOPIC_KEY)
+        {
+            running.store(true, std::sync::atomic::Ordering::Release);
+            Ok(EmptyRes {})
+        } else {
+            Err(FrbPostcardRpcError::InternalError)
+        }
+    }
+
+    async fn stop_raw_nmea_topic(&self, _req: NoArg) -> Result<EmptyRes, FrbPostcardRpcError> {
+        log::debug!("Stop raw nmea topic called");
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        if let Some(flag) = self
+            .streams_running_status
+            .lock()
+            .await
+            .get(&RawNmeaTopic::TOPIC_KEY)
+        {
+            flag.store(false, std::sync::atomic::Ordering::Release);
+            Ok(EmptyRes {})
+        } else {
+            Err(FrbPostcardRpcError::InternalError)
+        }
+    }
+
+    async fn start_parsed_gps_topic(&self, _req: NoArg) -> Result<EmptyRes, FrbPostcardRpcError> {
+        log::debug!("Start parsed gps topic called");
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        if let Some(running) = self
+            .streams_running_status
+            .lock()
+            .await
+            .get(&ParsedGpsTopic::TOPIC_KEY)
+        {
+            running.store(true, std::sync::atomic::Ordering::Release);
+            Ok(EmptyRes {})
+        } else {
+            Err(FrbPostcardRpcError::InternalError)
+        }
+    }
+
+    async fn stop_parsed_gps_topic(&self, _req: NoArg) -> Result<EmptyRes, FrbPostcardRpcError> {
+        log::debug!("Stop parsed gps topic called");
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        if let Some(flag) = self
+            .streams_running_status
+            .lock()
+            .await
+            .get(&ParsedGpsTopic::TOPIC_KEY)
+        {
+            flag.store(false, std::sync::atomic::Ordering::Release);
+            Ok(EmptyRes {})
+        } else {
+            Err(FrbPostcardRpcError::InternalError)
+        }
+    }
+}
 
 impl CundaSysT for MockClient {
     async fn create_sys_stats_topic_stream(
@@ -241,6 +309,65 @@ impl CundaSysT for MockClient {
             .entry(SysLogsTopic::TOPIC_KEY)
             .or_insert(Arc::new(AtomicBool::new(false)));
         let handle = log_stream
+            .leak_into_sink(sink, keep_notifying.clone())
+            .await;
+        self.topic_join_handles.lock().await.push(handle);
+
+        Ok(())
+    }
+}
+
+impl CundaGpsT for MockClient {
+    async fn create_raw_nmea_topic_stream(
+        &self,
+        sink: StreamSink<RawNmea0183Sentence>,
+    ) -> ::core::result::Result<(), FrbPostcardRpcError> {
+        let nmea_sentence_stream = helpers::PeriodicTopicOutput::<RawNmea0183Sentence, _>::new(
+            [
+                RawNmea0183Sentence("hello nmea sentece1".into()),
+                RawNmea0183Sentence(
+                    "$GPGGA,092750.00,5321.6802,N,00630.3372,W,1,08,1.02,61.7,M,55.2,M,,*76".into(),
+                ),
+                RawNmea0183Sentence(
+                    "$GPGSA,A,3,10,07,05,02,29,04,08,13,,,,,1.72,1.03,1.38*0A".into(),
+                ),
+                RawNmea0183Sentence(
+                    "$GPGSV,3,1,11,10,15,049,29,07,35,268,39,05,42,128,41,02,07,219,20*7F".into(),
+                ),
+                RawNmea0183Sentence(
+                    "$GPRMC,092750.00,A,5321.6802,N,00630.3372,W,0.02,31.66,280511,,,A*7F".into(),
+                ),
+                RawNmea0183Sentence("$GPVTG,31.66,T,,M,0.02,N,0.04,K,A*3D".into()),
+            ],
+            core::time::Duration::from_millis(200),
+        );
+
+        let mut streams_running_status_guard = self.streams_running_status.lock().await;
+        let keep_notifying = streams_running_status_guard
+            .entry(RawNmeaTopic::TOPIC_KEY)
+            .or_insert(Arc::new(AtomicBool::new(false)));
+        let handle = nmea_sentence_stream
+            .leak_into_sink(sink, keep_notifying.clone())
+            .await;
+        self.topic_join_handles.lock().await.push(handle);
+
+        Ok(())
+    }
+
+    async fn create_parsed_gps_topic_stream(
+        &self,
+        sink: StreamSink<GpsDataWire>,
+    ) -> Result<(), FrbPostcardRpcError> {
+        let parsed_gps_stream = helpers::PeriodicTopicOutput::<GpsDataWire, _>::new(
+            [GpsDataWire::default()],
+            core::time::Duration::from_secs(1),
+        );
+
+        let mut streams_running_status_guard = self.streams_running_status.lock().await;
+        let keep_notifying = streams_running_status_guard
+            .entry(ParsedGpsTopic::TOPIC_KEY)
+            .or_insert(Arc::new(AtomicBool::new(false)));
+        let handle = parsed_gps_stream
             .leak_into_sink(sink, keep_notifying.clone())
             .await;
         self.topic_join_handles.lock().await.push(handle);

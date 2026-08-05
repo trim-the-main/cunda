@@ -245,7 +245,7 @@ macro_rules! merge_topic_lists {
     };
     ($l1:expr, $l2:expr, $l3:expr $(,)?) => {
         const {
-            const __FIRST_2: ::postcard_rpc::TopicMap = $crate::merge_endpoint_lists!($l1, $l2);
+            const __FIRST_2: ::postcard_rpc::TopicMap = $crate::merge_topic_lists!($l1, $l2);
             $crate::merge_topic_lists!(__FIRST_2, $l3)
         }
     };

@@ -12,6 +12,7 @@ import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/p
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/devices/demo_esp32/v1/endpoints.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
 import 'package:cunda_flutter/providers/rpc/base.dart';
+import 'package:cunda_flutter/providers/rpc/cunda_gps.dart';
 import 'package:cunda_flutter/providers/rpc/cunda_sys.dart';
 import 'package:cunda_flutter/providers/rpc/device_logs.dart';
 import 'package:cunda_flutter/providers/rpc/devices/demo_esp32.dart';
@@ -46,11 +47,17 @@ List<Override> fakeProviderOverrides() {
     appEndpointsProvider.overrideWith(
       (ref, device) async => _clientFor(device) as DemoAppEndpoints,
     ),
+    gpsEndpointsProvider.overrideWith(
+      (ref, device) async => _clientFor(device) as CundaGpsE,
+    ),
     sysEndpointsProvider.overrideWith(
       (ref, device) async => _clientFor(device) as CundaSysE,
     ),
     appTopicsProvider.overrideWith(
       (ref, device) async => _clientFor(device) as DemoAppTopics,
+    ),
+    gpsTopicsProvider.overrideWith(
+      (ref, device) async => _clientFor(device) as CundaGpsT,
     ),
     sysTopicsProvider.overrideWith(
       (ref, device) async => _clientFor(device) as CundaSysT,

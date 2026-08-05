@@ -15,7 +15,7 @@ use crate::{
 
 use super::super::tirbod::TirbodTopics;
 use protocol::{
-    cunda_common::v1::{endpoints::*, topics::*},
+    cunda_common::v1::{endpoints::*, topics::sys::*},
     devices::tirbod::v1::{endpoints::*, types::*},
 };
 
@@ -31,7 +31,7 @@ impl MockTirbodV1Client {
         log::info!("Creating a new fake client");
         let log_table: Vec<(Level, &'static str)> = vec![];
         Self {
-            mc: MockClient::new("nokta", 1, 1, log_table),
+            mc: MockClient::new("tirbod", 1, 1, log_table),
             current_application_settings: Mutex::new(TirbodSettings {}),
         }
     }

@@ -23,3 +23,15 @@ endpoints_for_cunda! {
     | ApproveFirmware     | NoArg       | OtaResult              | "approve_firmware_version" |
     | FactoryReset        | NoArg       | OtaResult              | "factory_reset"            |
 }
+
+endpoints_for_cunda! {
+    list = CUNDA_GPS_ENDPOINTS;
+    trait_name = CundaGpsE;
+
+    | EndpointTy           | RequestTy   | ResponseTy             | Path                      |
+    | ----------           | ---------   | ----------             | ----                      |
+    | StartRawNmeaTopic    | NoArg       | EmptyRes               | "start_raw_nmea_topic"    |
+    | StopRawNmeaTopic     | NoArg       | EmptyRes               | "stop_raw_nmea_topic"     |
+    | StartParsedGpsTopic  | NoArg       | EmptyRes               | "start_parsed_gps_topic"  |
+    | StopParsedGpsTopic   | NoArg       | EmptyRes               | "stop_parsed_gps_topic"   |
+}

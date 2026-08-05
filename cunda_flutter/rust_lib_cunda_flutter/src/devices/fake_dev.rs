@@ -4,7 +4,7 @@ use frb_prpc_juggle::client_interface::{
 };
 use postcard_rpc::Topic;
 use protocol::cunda_common::{
-    v1::{endpoints::*, topics::*},
+    v1::{endpoints::*, topics::sys::*},
     DeviceId,
 };
 use serde::de::DeserializeOwned;

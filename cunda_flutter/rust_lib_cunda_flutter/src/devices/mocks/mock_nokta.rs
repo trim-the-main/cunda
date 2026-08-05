@@ -10,12 +10,12 @@ use crate::{
     defmt_log_translation::{DefmtLogEntry, LogDecodingError},
     devices::mocks::base::MockClient,
     frb_generated::StreamSink,
-    rpc::CundaSysT,
+    rpc::{CundaGpsT, CundaSysT},
 };
 
 use super::super::nokta::NoktaTopics;
 use protocol::{
-    cunda_common::v1::{endpoints::*, topics::*},
+    cunda_common::v1::{endpoints::*, topics::sys::*},
     devices::nokta::v1::{endpoints::*, types::*},
 };
 
@@ -117,6 +117,56 @@ impl CundaSysE for MockNoktaV1Client {
 
     async fn factory_reset(&self, req: NoArg) -> Result<OtaResult, FrbPostcardRpcError> {
         self.mc.factory_reset(req).await
+    }
+}
+
+impl CundaGpsE for MockNoktaV1Client {
+    async fn start_raw_nmea_topic(
+        &self,
+        req: NoArg,
+    ) -> ::core::result::Result<EmptyRes, ::frb_prpc_juggle::client_interface::FrbPostcardRpcError>
+    {
+        self.mc.start_raw_nmea_topic(req).await
+    }
+
+    async fn stop_raw_nmea_topic(
+        &self,
+        req: NoArg,
+    ) -> ::core::result::Result<EmptyRes, ::frb_prpc_juggle::client_interface::FrbPostcardRpcError>
+    {
+        self.mc.stop_raw_nmea_topic(req).await
+    }
+
+    async fn start_parsed_gps_topic(
+        &self,
+        req: NoArg,
+    ) -> ::core::result::Result<EmptyRes, ::frb_prpc_juggle::client_interface::FrbPostcardRpcError>
+    {
+        self.mc.start_parsed_gps_topic(req).await
+    }
+
+    async fn stop_parsed_gps_topic(
+        &self,
+        req: NoArg,
+    ) -> ::core::result::Result<EmptyRes, ::frb_prpc_juggle::client_interface::FrbPostcardRpcError>
+    {
+        self.mc.stop_parsed_gps_topic(req).await
+    }
+}
+
+impl CundaGpsT for MockNoktaV1Client {
+    async fn create_raw_nmea_topic_stream(
+        &self,
+        sink: StreamSink<RawNmea0183Sentence>,
+    ) -> Result<(), FrbPostcardRpcError> {
+        self.mc.create_raw_nmea_topic_stream(sink).await
+    }
+
+    async fn create_parsed_gps_topic_stream(
+        &self,
+        sink: StreamSink<GpsDataWire>,
+    ) -> Result<(), FrbPostcardRpcError> {
+        self.mc.create_parsed_gps_topic_stream(sink).await
     }
 }
 

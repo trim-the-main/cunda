@@ -84,7 +84,7 @@ pub(crate) async fn start_sys_stats_topic(
     defmt::debug!("Handling start_sys_stats_topic");
     let topic_stop_signal = context
         .task_table
-        .stop_signal(topics::SysStatsTopic::TOPIC_KEY);
+        .stop_signal(topics::sys::SysStatsTopic::TOPIC_KEY);
     topic_stop_signal.try_take(); // clear the pending stop signals (we haven't responded to the start request yet.)
     let _guard = crate::stats::start_collecting_stats();
     if let Err(err) = sender
@@ -103,7 +103,7 @@ pub(crate) async fn start_sys_stats_topic(
         let stats = sys_stats();
 
         if let Err(err) = sender
-            .publish::<topics::SysStatsTopic>(seq.into(), &stats)
+            .publish::<topics::sys::SysStatsTopic>(seq.into(), &stats)
             .await
         {
             defmt::error!("Send error! {}", err);
@@ -126,7 +126,7 @@ pub(crate) fn stop_sys_stats_topic(
 
     let topic_stop_signal = context
         .task_table
-        .stop_signal(topics::SysStatsTopic::TOPIC_KEY);
+        .stop_signal(topics::sys::SysStatsTopic::TOPIC_KEY);
     topic_stop_signal.signal(());
     types::EmptyRes {}
 }
@@ -141,7 +141,7 @@ pub(crate) async fn start_sys_logs_topic(
     defmt::debug!("Handling start_sys_logs_topic");
     let topic_stop_signal = context
         .task_table
-        .stop_signal(topics::SysLogsTopic::TOPIC_KEY);
+        .stop_signal(topics::sys::SysLogsTopic::TOPIC_KEY);
     topic_stop_signal.try_take(); // clear the pending stop signals (we haven't responded to the start request yet.)
     if let Err(err) = sender
         .reply::<endpoints::StartSysLogsTopic>(header.seq_no, &(().into()))
@@ -177,7 +177,7 @@ pub(crate) async fn start_sys_logs_topic(
             Either::Second(_) => break,
         };
         if let Err(err) = sender
-            .publish::<topics::SysLogsTopic>(seq.into(), &logs_to_send)
+            .publish::<topics::sys::SysLogsTopic>(seq.into(), &logs_to_send)
             .await
         {
             defmt::error!("Send error! {}", err);
@@ -196,7 +196,7 @@ pub(crate) fn stop_sys_logs_topic(
 
     let topic_stop_signal = context
         .task_table
-        .stop_signal(topics::SysLogsTopic::TOPIC_KEY);
+        .stop_signal(topics::sys::SysLogsTopic::TOPIC_KEY);
     topic_stop_signal.signal(());
     types::EmptyRes {}
 }

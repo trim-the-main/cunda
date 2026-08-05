@@ -55,3 +55,24 @@ pub enum _Level {
     Warn,
     Error,
 }
+
+pub use nmea_ubx_gps::pvt::FixType;
+#[flutter_rust_bridge::frb(mirror(FixType))]
+pub enum _FixType {
+    NoFix,
+    DeadReckoningOnly,
+    Fix2D,
+    Fix3D,
+    GnssPlusDeadReckoning,
+    TimeOnlyFix,
+}
+
+pub use nmea_ubx_gps::datetime_wrappers::{WireDate, WireTime};
+
+#[allow(dead_code)]
+#[flutter_rust_bridge::frb(mirror(WireDate))]
+pub struct _WireDate(time::Date);
+
+#[allow(dead_code)]
+#[flutter_rust_bridge::frb(mirror(WireTime))]
+pub struct _WireTime(time::Time);
