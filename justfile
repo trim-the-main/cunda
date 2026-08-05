@@ -136,7 +136,7 @@ run-flutter-fast:
 # Run the Flutter application with fake BLE (no hardware needed)
 [working-directory('cunda_flutter')]
 run-flutter-fake:
-    flutter run --dart-define="FAKE_BLE=true" --dart-define="LOG_LEVEL=Fine"
+    RUST_LOG="debug" flutter run --dart-define="FAKE_BLE=true" --dart-define="LOG_LEVEL=Fine"
 
 # Run the code generation only
 [working-directory('cunda_flutter')]
