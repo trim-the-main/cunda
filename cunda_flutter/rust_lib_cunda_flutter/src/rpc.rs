@@ -50,4 +50,6 @@ where
     }
 }
 
-protocol::cunda_common::v1::topics::define_topic_trait!(CundaSysT with StreamSink);
+protocol::cunda_common::v1::topics::sys::define_topic_trait!(CundaSysT with StreamSink);
+
+protocol::cunda_common::v1::topics::gps::define_topic_trait!(CundaGpsT with StreamSink);

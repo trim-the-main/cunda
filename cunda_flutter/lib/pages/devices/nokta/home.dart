@@ -1,3 +1,4 @@
+import 'package:cunda_flutter/pages/devices/nokta/gps_page.dart';
 import 'package:cunda_flutter/pages/system/cunda_common_page_components.dart';
 import 'package:cunda_flutter/pages/system/system_status.dart';
 import 'package:flutter/material.dart';
@@ -24,7 +25,7 @@ class NoktaDevicePage extends StatelessWidget {
         ),
         body: TabBarView(
           children: [
-            Center(child: Text("Nokta Application Page")),
+            GpsPage(device: device),
             SystemStatus(device: device),
           ],
         ),
