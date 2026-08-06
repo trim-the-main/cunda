@@ -20,3 +20,6 @@ nmea_ubx_gps = { path = "../nmea_ubx_gps" }
 flutter_rust_bridge = { version = "=2.11.1", optional = true }
 [features]
 flutter = [ "dep:frb_prpc_juggle", "dep:chrono", "dep:flutter_rust_bridge"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
