@@ -3,7 +3,7 @@ use core::cell::RefCell;
 use bt_hci::cmd::le::{LeConnUpdate, LeReadLocalSupportedFeatures, LeSetDataLength};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use defmt_brtt::DefmtConsumer;
-use embassy_executor::{Spawner, SpawnerTraceExt};
+use embassy_executor::Spawner;
 use embassy_time::Duration;
 use esp_radio::ble::Config;
 use esp_radio::ble::controller::BleConnector;
@@ -38,11 +38,8 @@ pub async fn ble_init(
     logger: DefmtConsumer,
     rt_ctxt: &'static RuntimeContext,
 ) {
-    static RADIO: StaticCell<esp_radio::Controller<'static>> = StaticCell::new();
-    let radio_init =
-        RADIO.init(esp_radio::init().expect("Failed to initialize Wi-Fi/BLE controller"));
     let config = Config::default();
-    let transport = BleConnector::new(radio_init, device, config).unwrap();
+    let transport = BleConnector::new(device, config).unwrap();
     let ble_controller: ExternalController<BleConnector<'_>, N_CMD_SLOTS> =
         ExternalController::<_, N_CMD_SLOTS>::new(transport);
 
@@ -63,9 +60,7 @@ pub async fn ble_init(
         peripheral, runner, ..
     } = stack.build();
 
-    spawner
-        .spawn_named("BleBackendTask", ble_backend_task(runner))
-        .expect("Failed to spawn BleBackendTask");
+    spawner.spawn(ble_backend_task(runner).expect("Failed to spawn BleBackendTask"));
 
     let dev_name = {
         let sys_config = crate::storage::SYSTEM_CONFIG.get_or_default().await;
@@ -80,14 +75,12 @@ pub async fn ble_init(
     }));
     let (conn, d_runner, tx) = prpc.init();
 
-    spawner
-        .spawn_named(
-            "BleFrontendTask",
-            ble_frontend_task(
-                conn, peripheral, spawner, logger, rt_ctxt, tx, d_runner, stack,
-            ),
+    spawner.spawn(
+        ble_frontend_task(
+            conn, peripheral, spawner, logger, rt_ctxt, tx, d_runner, stack,
         )
-        .expect("Failed to spawn BleFrontendTask");
+        .expect("Failed to spawn BleFrontendTask"),
+    );
 }
 /// Background task for communicating with lower level, today we panic if it fails but maybe
 /// we can do a more graceful restart later. I dont think there's any recoverable error here.
@@ -118,13 +111,13 @@ where
     connection
         .update_connection_params(
             &stack,
-            &ConnectParams {
+            &RequestedConnParams {
                 min_connection_interval: Duration::from_micros(7500),
                 max_connection_interval: Duration::from_micros(7500),
                 max_latency: 0,
-                supervision_timeout: Duration::from_secs(5),
                 min_event_length: Duration::from_secs(0),
                 max_event_length: Duration::from_secs(0),
+                supervision_timeout: Duration::from_secs(5),
             },
         )
         .await
@@ -152,11 +145,29 @@ pub async fn ble_frontend_task(
     let dispatcher = BleDispatcher::new(context, spawner.into());
     let vkk = dispatcher.min_key_len();
 
-    spawner.must_spawn(rpc_dispatcher_task(
-        d_runner,
-        dispatcher,
-        Sender::new(tx, vkk),
-    ));
+    let key_size = match vkk {
+        postcard_rpc::header::VarKeyKind::Key1 => 1u8,
+        postcard_rpc::header::VarKeyKind::Key2 => 2u8,
+        postcard_rpc::header::VarKeyKind::Key4 => 4u8,
+        postcard_rpc::header::VarKeyKind::Key8 => 8u8,
+    };
+    defmt::info!("Ble dispatcher min key: {}", key_size);
+    for (p, req, res) in dispatcher.device_map.endpoints {
+        defmt::info!(
+            "Ble dispatcher endpoints: {} {} {}",
+            *p,
+            req.to_bytes(),
+            res.to_bytes()
+        );
+    }
+    for (p, msg) in dispatcher.device_map.topics_out {
+        defmt::info!("Ble dispatcher topics: {} {}", *p, msg.to_bytes(),);
+    }
+
+    spawner.spawn(
+        rpc_dispatcher_task(d_runner, dispatcher, Sender::new(tx, vkk))
+            .expect("Failed to spawn rpc dispatcher task"),
+    );
 
     // Connection lifecycle loop
     loop {

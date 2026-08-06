@@ -100,17 +100,22 @@ where
                         supervision_timeout
                     );
                 }
-                GattConnectionEvent::RequestConnectionParams {
-                    min_connection_interval,
-                    max_connection_interval,
-                    max_latency,
-                    supervision_timeout,
-                } => {
-                    defmt::info!(
-                        "GattConnectionEvent::RequestConnectionParams min_connection_interval: {} max_connection_interval: {} max_latency: {} supervision_timeout: {}",
+                GattConnectionEvent::RequestConnectionParams(conn_params_req) => {
+                    let RequestedConnParams {
                         min_connection_interval,
                         max_connection_interval,
                         max_latency,
+                        min_event_length,
+                        max_event_length,
+                        supervision_timeout,
+                    } = conn_params_req.params();
+                    defmt::info!(
+                        "GattConnectionEvent::RequestConnectionParams min_connection_interval: {} max_connection_interval: {} max_latency: {} min_event_length: {} max_event_length: {} supervision_timeout: {}",
+                        min_connection_interval,
+                        max_connection_interval,
+                        max_latency,
+                        min_event_length,
+                        max_event_length,
                         supervision_timeout
                     );
                 }
@@ -175,6 +180,12 @@ where
                             defmt::warn!("Got unexpected GattEvent::Other {}", att_cmd);
                         }
                     },
+                    GattEvent::NotAllowed(not_allowed_event) => {
+                        defmt::warn!(
+                            "Not allowed event from the central device {}",
+                            not_allowed_event.handle()
+                        );
+                    }
                 },
             }
         }

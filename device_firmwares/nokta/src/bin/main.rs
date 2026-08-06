@@ -13,6 +13,7 @@ use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
 use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::system::Stack;
+use esp_hal::time::Rate;
 use esp_hal::timer::timg::TimerGroup;
 use esp_rtos::embassy::Executor;
 use static_cell::StaticCell;
@@ -52,7 +53,8 @@ async fn main(spawner: Spawner) -> ! {
     esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 98768);
 
     let timg0 = TimerGroup::new(peripherals.TIMG0);
-    esp_rtos::start(timg0.timer0);
+    let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
+    esp_rtos::start(timg0.timer0, sw_int.software_interrupt0);
 
     defmt::info!("Embassy initialized on Core 0");
 
@@ -76,10 +78,8 @@ async fn main(spawner: Spawner) -> ! {
 
     static APP_CORE_STACK: StaticCell<Stack<16384>> = StaticCell::new();
     let app_core_stack = APP_CORE_STACK.init(Stack::new());
-    let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     esp_rtos::start_second_core(
         peripherals.CPU_CTRL,
-        sw_int.software_interrupt0,
         sw_int.software_interrupt1,
         app_core_stack,
         move || {
@@ -88,12 +88,14 @@ async fn main(spawner: Spawner) -> ! {
             executor.run(|spawner| {
                 static I2C_BUS: StaticCell<Mutex<I2CType>> = StaticCell::new();
                 let i2c_bus = SharedI2C::new(I2C_BUS.init(Mutex::new(i2c.into_async())));
-                spawner
-                    .spawn(ublox_gps_worker(i2c_bus.clone(), rt_ctxt))
-                    .expect("Failed to spawn ublox_gps_worker");
-                spawner
-                    .spawn(nmea_gps_parser_worker(rt_ctxt))
-                    .expect("Failed to spawn nmea_gps_parser_worker");
+                spawner.spawn(
+                    ublox_gps_worker(i2c_bus.clone(), rt_ctxt)
+                        .expect("Failed to spawn ublox_gps_worker"),
+                );
+                spawner.spawn(
+                    nmea_gps_parser_worker(rt_ctxt)
+                        .expect("Failed to spawn nmea_gps_parser_worker"),
+                );
             });
         },
     );

@@ -191,8 +191,8 @@ impl CundaOta {
                         ))?
                         .expect("Did not find OTA data partition");
 
-                    let mut ota_part = ota_part.as_embedded_storage(flash);
-                    let mut ota = ota::Ota::new(&mut ota_part, 2)?;
+                    let ota_part = ota_part.as_embedded_storage(flash);
+                    let mut ota = ota::Ota::new(ota_part, 2)?;
                     ota.set_current_app_partition(subtype)?;
                     if subtype != AppPartitionSubType::Factory {
                         ota.set_current_ota_state(ota::OtaImageState::New)?;
