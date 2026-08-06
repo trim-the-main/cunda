@@ -227,6 +227,19 @@ impl PrpcClient {
                 hdr,
                 body
             );
+            {
+                // log the pending key, why did we not understand this message???
+                let pending = self.pending_response.lock().await;
+                if let Some((resp_key, _)) = pending.as_ref() {
+                    log::warn!(
+                        "We were waiting for either ok: {:?} or err: {:?}",
+                        resp_key.ok_header,
+                        resp_key.err_header
+                    );
+                } else {
+                    log::warn!("There was no pending rpc request");
+                }
+            }
         }
         Ok(())
     }
