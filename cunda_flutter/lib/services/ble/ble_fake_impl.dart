@@ -87,6 +87,12 @@ class FakeBleService implements BleService {
     FakeBluetoothDevice(),
     FakeBluetoothDevice(),
     FakeBluetoothDevice(),
+    FakeBluetoothDevice(),
+    FakeBluetoothDevice(),
+    FakeBluetoothDevice(),
+    FakeBluetoothDevice(),
+    FakeBluetoothDevice(),
+    FakeBluetoothDevice(),
   ];
 
   bool _isScanning = false;
