@@ -1,6 +1,6 @@
 use core::fmt::Display;
 
-#[cfg(feature = "embassy-time")]
+#[cfg(feature = "no-std")]
 use num_traits::float::FloatCore;
 
 pub struct Latitude(pub f64);

@@ -1,4 +1,4 @@
-#![cfg_attr(feature = "embassy-time", no_std)]
+#![cfg_attr(feature = "no-std", no_std)]
 
 pub mod datetime_wrappers;
 pub mod display;

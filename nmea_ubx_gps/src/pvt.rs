@@ -1,7 +1,8 @@
-#[cfg(feature = "embassy-time")]
+#[cfg(feature = "no-std")]
 use embassy_time::Instant;
-#[cfg(not(feature = "embassy-time"))]
-use std::time::Instant;
+#[cfg(not(feature = "no-std"))]
+static START: std::sync::LazyLock<std::time::Instant> =
+    std::sync::LazyLock::new(std::time::Instant::now);
 
 use core::num::NonZeroU64;
 use serde::{Deserialize, Serialize};
@@ -71,9 +72,16 @@ impl<'a> GpsData {
         Default::default()
     }
 
+    #[cfg(feature = "no-std")]
     pub fn updated_at(&self) -> Option<Instant> {
         self.updated_at
             .map(|nanos| Instant::from_nanos(nanos.into()))
+    }
+
+    #[cfg(not(feature = "no-std"))]
+    pub fn updated_at(&self) -> Option<std::time::Duration> {
+        self.updated_at
+            .map(|nanos| std::time::Duration::from_nanos(nanos.into()))
     }
 
     pub fn update_with_sentence(
@@ -124,7 +132,7 @@ impl<'a> GpsData {
         } else {
             FixType::Fix2D
         };
-        self.updated_at = NonZeroU64::new(Instant::now().as_nanos());
+        self.updated_at = NonZeroU64::new(Self::now());
     }
 
     fn merge_rmc_data(&mut self, rmc: nmea::sentences::RmcData) {
@@ -141,7 +149,7 @@ impl<'a> GpsData {
 
         self.utc_time = rmc.fix_time.map(|t| t.into());
         self.utc_date = rmc.fix_date.map(|t| t.into());
-        self.updated_at = NonZeroU64::new(Instant::now().as_nanos());
+        self.updated_at = NonZeroU64::new(Self::now());
 
         let Some(pos) = GpsPosition::try_from_floats(latitude, longitude, None, None) else {
             return;
@@ -159,5 +167,15 @@ impl<'a> GpsData {
             Some(old_pos) => Some(old_pos.update(pos)),
             None => Some(pos),
         };
+    }
+
+    #[cfg(feature = "no-std")]
+    fn now() -> u64 {
+        Instant::now().as_nanos()
+    }
+
+    #[cfg(not(feature = "no-std"))]
+    fn now() -> u64 {
+        START.elapsed().as_nanos() as u64
     }
 }
