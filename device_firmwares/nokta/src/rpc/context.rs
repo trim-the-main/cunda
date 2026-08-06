@@ -5,6 +5,8 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal}
 use postcard_rpc::{Key, TopicMap, server::SpawnContext};
 use protocol::devices::nokta::v1::topics;
 
+use crate::context::RuntimeContext;
+
 type TopicStopSignal = Signal<CriticalSectionRawMutex, ()>;
 const fn topic_state<const SIZE: usize>(map: TopicMap) -> [(&'static Key, TopicStopSignal); SIZE] {
     let mut table: [MaybeUninit<(&'static Key, TopicStopSignal)>; SIZE] =
@@ -40,14 +42,20 @@ pub(crate) struct DispatchContext {
     pub(crate) task_table: TopicTaskTable,
     pub(crate) logger: &'static RefCell<DefmtConsumer>,
     pub(crate) tx: crate::ble::BleWireTxImpl,
+    pub(crate) rt_ctxt: &'static RuntimeContext,
 }
 
 impl DispatchContext {
-    pub fn new(logger: &'static RefCell<DefmtConsumer>, tx: crate::ble::BleWireTxImpl) -> Self {
+    pub fn new(
+        logger: &'static RefCell<DefmtConsumer>,
+        tx: crate::ble::BleWireTxImpl,
+        rt_ctxt: &'static RuntimeContext,
+    ) -> Self {
         Self {
             task_table: TopicTaskTable(&TOPIC_TASK_STATE),
             logger,
             tx,
+            rt_ctxt,
         }
     }
 }
@@ -55,6 +63,7 @@ impl DispatchContext {
 pub struct DispatchSpawnContext {
     pub task_table: TopicTaskTable,
     pub logger: &'static RefCell<DefmtConsumer>,
+    pub rt_ctxt: &'static RuntimeContext,
 }
 
 impl SpawnContext for DispatchContext {
@@ -64,6 +73,7 @@ impl SpawnContext for DispatchContext {
         DispatchSpawnContext {
             task_table: self.task_table,
             logger: self.logger,
+            rt_ctxt: self.rt_ctxt,
         }
     }
 }

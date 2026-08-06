@@ -2,32 +2,26 @@
 #![feature(macro_metavar_expr)]
 #![feature(maybe_uninit_uninit_array_transpose)]
 
-use embassy_time::Instant;
+extern crate alloc;
+
 pub mod ble;
 mod rpc;
 
 mod stats;
 pub mod storage;
 
-pub struct LogTimeOfScope {
-    start: Instant,
-    name: &'static str,
-}
+pub mod i2c;
 
-impl LogTimeOfScope {
-    pub fn new(name: &'static str) -> Self {
-        Self {
-            start: Instant::now(),
-            name,
-        }
-    }
-}
+// pub mod oled_screen;
+// pub mod screen_service;
 
-impl Drop for LogTimeOfScope {
-    fn drop(&mut self) {
-        let took = Instant::now() - self.start;
-        defmt::info!("{} took {} ms", self.name, took.as_millis());
-    }
-}
+// pub mod temperature_service;
+
+pub mod ublox_nmea_service; // Read nmea sentences from ublox device, publish them on the nmea channel
+
+pub mod nmea_gps_parser;
+
+pub mod context;
+pub mod diagnostic_helpers;
 
 defmt::timestamp!("{=u64} us", embassy_time::Instant::now().as_micros());

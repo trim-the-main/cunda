@@ -1,7 +1,7 @@
 use postcard_rpc::header::VarHeader;
 use protocol::cunda_common::v1::types::{NoArg, OtaBytes, OtaMData, OtaResult};
 
-use crate::rpc::context::DispatchContext;
+use crate::{diagnostic_helpers::LogTimeOfScope, rpc::context::DispatchContext};
 
 pub(super) async fn prepare(
     _context: &mut DispatchContext,
@@ -79,7 +79,7 @@ pub(super) async fn approve_firmware(
     _rqst: NoArg,
 ) -> OtaResult {
     defmt::debug!("Handling ApproveFirmware");
-    let _timer = crate::LogTimeOfScope::new("Handling of ApproveFirmware");
+    let _timer = LogTimeOfScope::new("Handling of ApproveFirmware");
 
     let mut ota = crate::storage::ota::OTA.lock().await;
     if let Some(ref mut ota) = *ota {

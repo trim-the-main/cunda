@@ -21,4 +21,4 @@ postcard-schema = { version = "0.2", features = ["chrono-v0_4", "derive"] }
 pastey = "0.2.1"
 
 [features]
-no-std = ["dep:embassy-time"]
+no-std = ["dep:embassy-time", "nmea/defmt-03"]

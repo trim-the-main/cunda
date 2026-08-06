@@ -13,6 +13,8 @@ use postcard_rpc_ble::{BleWireTx, DispatcherRunner, PrpcBleConn, PrpcBleStorage}
 use static_cell::StaticCell;
 use trouble_host::prelude::*;
 
+use crate::context::RuntimeContext;
+use crate::diagnostic_helpers::LogTimeOfScope;
 use crate::rpc::context::DispatchContext;
 use crate::rpc::dispatcher::BleDispatcher;
 
@@ -34,6 +36,7 @@ pub async fn ble_init(
     spawner: Spawner,
     device: esp_hal::peripherals::BT<'static>,
     logger: DefmtConsumer,
+    rt_ctxt: &'static RuntimeContext,
 ) {
     static RADIO: StaticCell<esp_radio::Controller<'static>> = StaticCell::new();
     let radio_init =
@@ -80,7 +83,9 @@ pub async fn ble_init(
     spawner
         .spawn_named(
             "BleFrontendTask",
-            ble_frontend_task(conn, peripheral, spawner, logger, tx, d_runner, stack),
+            ble_frontend_task(
+                conn, peripheral, spawner, logger, rt_ctxt, tx, d_runner, stack,
+            ),
         )
         .expect("Failed to spawn BleFrontendTask");
 }
@@ -131,6 +136,7 @@ pub async fn ble_frontend_task(
     mut periph: PeriphRole,
     spawner: Spawner,
     logger: DefmtConsumer,
+    rt_ctxt: &'static RuntimeContext,
     tx: BleWireTxImpl,
     d_runner: DispatcherRunner<'static, 'static, 'static, 1>,
     stack: &'static Stack<
@@ -142,7 +148,7 @@ pub async fn ble_frontend_task(
     static LOGGER: StaticCell<RefCell<DefmtConsumer>> = StaticCell::new();
     let logger = LOGGER.init(RefCell::new(logger));
     // Create and spawn the dispatcher task
-    let context = DispatchContext::new(logger, tx.clone());
+    let context = DispatchContext::new(logger, tx.clone(), rt_ctxt);
     let dispatcher = BleDispatcher::new(context, spawner.into());
     let vkk = dispatcher.min_key_len();
 
@@ -157,7 +163,7 @@ pub async fn ble_frontend_task(
         let sys_config = crate::storage::SYSTEM_CONFIG.get_or_default().await;
         match advertise_once(&mut periph, &sys_config.ble_adv_name).await {
             Ok(connection) => {
-                let time_logger = crate::LogTimeOfScope::new("Updating connection parameters");
+                let time_logger = LogTimeOfScope::new("Updating connection parameters");
                 let _ = update_connection_params(stack, &connection)
                     .await
                     .map_err(|err| {

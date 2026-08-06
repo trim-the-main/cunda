@@ -38,6 +38,11 @@ define_dispatch! {
         // Application Endpoints
         | GetApplSettings         | async             | get_appl_settings  |
         | SetApplSettings         | async             | set_appl_settings  |
+        // cunda_common gps
+        | StartRawNmeaTopic      | spawn               | start_raw_nmea_topic    |
+        | StopRawNmeaTopic       | blocking            | stop_raw_nmea_topic     |
+        | StartParsedGpsTopic    | spawn               | start_parsed_gps_topic  |
+        | StopParsedGpsTopic     | blocking            | stop_parsed_gps_topic   |
     };
     topics_in: {
         list: topics::EMPTY_TOPICS;

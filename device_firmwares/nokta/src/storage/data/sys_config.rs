@@ -17,7 +17,7 @@ pub struct SysConfig {
 impl Default for SysConfig {
     fn default() -> Self {
         Self {
-            ble_adv_name: heapless::String::from_str("Cunda").unwrap(),
+            ble_adv_name: heapless::String::from_str("Nokta").unwrap(),
         }
     }
 }
