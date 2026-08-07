@@ -4,10 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-time = { version = "0.3", default-features = false, features = [
-    "macros",
-    "serde",
-] }
 embassy-time = { version = "0.5.1", optional = true }
 
 num-traits = { version = "0.2.19", default-features = false }
@@ -16,9 +12,10 @@ serde = { version = "1.0.228", default-features = false }
 nmea = { version = "0.7.0", default-features = false, features = ["all-sentences"] }
 ublox = { version = "0.10.0", default-features = false, features = ["alloc", "serde", "ubx_proto33"] }
 chrono = { version = "0.4", default-features = false, features = ["serde"] }
+defmt = { version = "1.0.1", optional = true }
 postcard-schema = { version = "0.2", features = ["chrono-v0_4", "derive"] }
 
 pastey = "0.2.1"
 
 [features]
-no-std = ["dep:embassy-time", "nmea/defmt-03"]
+no-std = ["dep:embassy-time", "dep:defmt", "nmea/defmt-03", "chrono/defmt"]

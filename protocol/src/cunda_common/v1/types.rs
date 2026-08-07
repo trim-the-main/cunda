@@ -141,15 +141,6 @@ impl GpsDataWire {
         let (Some(WireDate(d)), Some(WireTime(t))) = (self.utc_date, self.utc_time) else {
             return None;
         };
-        let naive_date =
-            chrono::NaiveDate::from_ymd_opt(d.year(), d.month() as u32, d.day() as u32)?;
-
-        let naive_time = chrono::NaiveTime::from_hms_nano_opt(
-            t.hour() as u32,
-            t.minute() as u32,
-            t.second() as u32,
-            t.nanosecond(),
-        )?;
-        Some(chrono::NaiveDateTime::new(naive_date, naive_time))
+        Some(chrono::NaiveDateTime::new(d, t))
     }
 }

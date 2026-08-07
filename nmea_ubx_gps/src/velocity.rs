@@ -2,6 +2,7 @@ use core::num::NonZeroU32;
 
 use crate::helpers::try_f32_to_i32;
 
+#[cfg_attr(feature = "no-std", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GpsVelocity {
     /// 2d ground speed mm/s

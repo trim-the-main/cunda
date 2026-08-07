@@ -71,8 +71,8 @@ pub use nmea_ubx_gps::datetime_wrappers::{WireDate, WireTime};
 
 #[allow(dead_code)]
 #[flutter_rust_bridge::frb(mirror(WireDate))]
-pub struct _WireDate(time::Date);
+pub struct _WireDate(chrono::NaiveDate);
 
 #[allow(dead_code)]
 #[flutter_rust_bridge::frb(mirror(WireTime))]
-pub struct _WireTime(time::Time);
+pub struct _WireTime(chrono::NaiveTime);

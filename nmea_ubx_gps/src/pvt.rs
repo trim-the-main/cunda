@@ -17,6 +17,7 @@ use crate::{
 
 use nmea::{ParseResult, SentenceType};
 
+#[cfg_attr(feature = "no-std", derive(defmt::Format))]
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct GpsData {
     /// in nanoseconds since the boot
@@ -33,6 +34,7 @@ pub struct GpsData {
     pub num_satellites_used: u8,
 }
 
+#[cfg_attr(feature = "no-std", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MagneticDeclination {
     /// magnetic declination 1e-2 degrees
@@ -42,6 +44,7 @@ pub struct MagneticDeclination {
     pub acc: u16,
 }
 
+#[cfg_attr(feature = "no-std", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Schema)]
 pub enum FixType {
     #[default]
