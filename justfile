@@ -25,7 +25,7 @@ build-firmware-debug device: (_check-device device)
     set -euo pipefail
     (
       cd "device_firmwares/{{ device }}"
-      DEFMT_LOG=info,postcard_rpc_ble=debug,{{ device }}=debug cargo build
+      DEFMT_LOG=info,postcard_rpc_ble=info,{{ device }}=debug cargo build
     )
 
 # Build the firmware in release mode
@@ -34,7 +34,7 @@ build-firmware-release device: (_check-device device)
 
 # Run the firmware in debug mode (uses espflash runner from .cargo/config.toml)
 run-firmware-debug device: (_check-device device)
-    (cd device_firmwares/{{ device }} && DEFMT_LOG=info,postcard_rpc_ble=debug,{{ device }}=debug cargo run)
+    (cd device_firmwares/{{ device }} && DEFMT_LOG=info,postcard_rpc_ble=info,{{ device }}=debug cargo run)
 
 # Run the firmware in release mode
 run-firmware-release device: (_check-device device)
