@@ -5,7 +5,7 @@ import 'package:cunda_flutter/pages/devices/demo_esp32/device.dart';
 import 'package:cunda_flutter/pages/devices/fake_dev/device.dart';
 import 'package:cunda_flutter/pages/devices/nokta/home.dart';
 import 'package:cunda_flutter/pages/devices/tirbod/home.dart';
-import 'package:cunda_flutter/providers/rpc/base.dart';
+import 'package:cunda_flutter/providers/rpc/protocol.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';

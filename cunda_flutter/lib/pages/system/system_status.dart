@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common/v1/types.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
-import 'package:cunda_flutter/providers/rpc/base.dart';
 import 'package:cunda_flutter/providers/rpc/ble_wiring.dart';
 import 'package:cunda_flutter/providers/rpc/cunda_sys.dart';
+import 'package:cunda_flutter/providers/rpc/protocol.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
 import 'package:cunda_flutter/utils/rust_type_helpers.dart';
 import 'package:flutter/material.dart';

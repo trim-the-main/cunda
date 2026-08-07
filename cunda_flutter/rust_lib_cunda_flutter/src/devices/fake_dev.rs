@@ -13,7 +13,7 @@ use crate::{
     defmt_log_translation::{DefmtLogEntry, LogDecodingError},
     devices::mocks::base::MockClient,
     frb_generated::StreamSink,
-    rpc::CundaSysT,
+    rpc::{CundaSysT, FlutterWire},
 };
 
 #[flutter_rust_bridge::frb(opaque)]
@@ -46,6 +46,20 @@ impl FakeDevV1Client {
     #[flutter_rust_bridge::frb(sync)]
     pub fn cunda_rpc_protocol() -> u32 {
         1
+    }
+}
+
+impl FlutterWire for FakeDevV1Client {
+    #[flutter_rust_bridge::frb(sync)]
+    fn init(&mut self, _sink: StreamSink<Vec<u8>>) {
+        panic!("We do not run init on protocol clients")
+    }
+
+    async fn rx_callback(
+        &self,
+        _data: &[u8],
+    ) -> Result<(), frb_prpc_juggle::client_interface::FrbPostcardRpcError> {
+        panic!("Fake client must not receive data from BLE wire")
     }
 }
 

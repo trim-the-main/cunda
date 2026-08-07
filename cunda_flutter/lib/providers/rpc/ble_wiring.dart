@@ -1,8 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
 import 'package:async/async.dart';
-import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/cunda_device_base.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:logging/logging.dart';
 
@@ -33,12 +34,10 @@ class NotRpcDeviceException implements Exception {
   NotRpcDeviceException({required this.notFound});
 }
 
-Future<CundaDeviceBase> bleWire(
+FutureOr<List<BluetoothCharacteristic>> rpcCharacteristics(
   BluetoothDevice device,
-  CundaDeviceBase base,
 ) async {
   final timer = Stopwatch()..start();
-  _log.fine("Setting up the Rpc client");
   final services = await device.discoverServices();
   _log.fine(
     "Discovering services took ${timer.elapsedMilliseconds} milliseconds",
@@ -57,6 +56,50 @@ Future<CundaDeviceBase> bleWire(
   }
 
   _log.fine("List of characteristics: $rpcServiceCharacteristics");
+  return rpcServiceCharacteristics;
+}
+
+Future<Stream<List<int>>> rxDataStream(BluetoothDevice device) async {
+  final rpcServiceCharacteristics = await rpcCharacteristics(device);
+  BluetoothCharacteristic toClientNotAcked;
+  try {
+    toClientNotAcked = rpcServiceCharacteristics
+        .where(
+          (c) => c.characteristicUuid == RpcUuid.toClientNotAcked.guidValue,
+        )
+        .single;
+  } on StateError {
+    _log.warning("No characteristic with UUID rpcToServerNotAckedCharUuid");
+    throw NotRpcDeviceException(notFound: RpcUuid.toServerNotAcked);
+  }
+  BluetoothCharacteristic toClientAcked;
+  try {
+    toClientAcked = rpcServiceCharacteristics
+        .where((c) => c.characteristicUuid == RpcUuid.toClientAcked.guidValue)
+        .single;
+  } on StateError {
+    _log.warning("No characteristic with UUID rpcToServerAckedCharUuid");
+    throw NotRpcDeviceException(notFound: RpcUuid.toServerAcked);
+  }
+  final mergedDataRx = StreamGroup.mergeBroadcast([
+    toClientNotAcked.onValueReceived,
+    toClientAcked.onValueReceived,
+  ]);
+
+  final logSub = mergedDataRx.listen((data) async {
+    _log.info("function rx from device: ${data.length} bytes");
+  });
+  device.cancelWhenDisconnected(logSub);
+  return mergedDataRx;
+}
+
+Future<StreamSubscription<List<int>>> bleWire(
+  BluetoothDevice device,
+  FlutterWire wire,
+) async {
+  final List<BluetoothCharacteristic> rpcServiceCharacteristics =
+      await rpcCharacteristics(device);
+  final timer = Stopwatch()..start();
   BluetoothCharacteristic toServerNotAcked;
   try {
     toServerNotAcked = rpcServiceCharacteristics
@@ -104,15 +147,17 @@ Future<CundaDeviceBase> bleWire(
   // It is important we wait for completion of the rxCallback,
   // otherwise the data may reach out of order. There shouldn't be
   // a second Future in flight before the first one completes.
-  final rxStreamSub =
-      StreamGroup.merge([
-        toClientNotAcked.onValueReceived,
-        toClientAcked.onValueReceived,
-      ]).listen((data) async {
-        _log.fine("rx from device: ${data.length} bytes");
-        await base.rxCallback(data: data);
-      });
+  final rxStreamSub = (await rxDataStream(device)).listen((data) async {
+    _log.fine("rx from device: ${data.length} bytes");
+    await wire.rxCallback(data: data);
+  });
   device.cancelWhenDisconnected(rxStreamSub);
+  _log.fine("Subscribed to call rxCallback on wire");
+  final logSub = (await rxDataStream(device)).listen((data) async {
+    _log.info("rx from device: ${data.length} bytes");
+  });
+  device.cancelWhenDisconnected(logSub);
+  _log.fine("Subscribed to log");
 
   // Data coming from the rust ffi uses the stream api
   // In flutter rust bridge, the generated code for function/method
@@ -122,9 +167,9 @@ Future<CundaDeviceBase> bleWire(
   // different and `init` method takes in a StreamSink argument. So
   // long story short the stream is not generated in the rust code that
   // we write but rather in the flutter_rust_bridge generated code.
-  final txStreamSub = base.init().listen((data) async {
-    _log.finest("tx to device: ${data.length} bytes");
-    _log.finest("$data");
+  final txStreamSub = wire.init().listen((data) async {
+    _log.fine("tx to device: ${data.length} bytes");
+    _log.fine("$data");
     final chunkSize = Platform.isLinux
         ? 251 - gattOverhead
         : device.mtuNow -
@@ -173,5 +218,5 @@ Future<CundaDeviceBase> bleWire(
   _log.fine(
     "setting notifications took ${timer.elapsedMilliseconds} milliseconds",
   );
-  return base;
+  return rxStreamSub;
 }

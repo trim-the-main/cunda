@@ -64,23 +64,6 @@ impl LogDecoder for CundaDeviceBase {
     }
 }
 
-impl<C> LogDecoder for C
-where
-    C: AsMut<CundaDeviceBase> + AsRef<CundaDeviceBase>,
-{
-    fn init_log_decoder(
-        &mut self,
-        table_bytes: &[u8],
-        loc_bytes: &[u8],
-    ) -> Result<(), LogDecodingError> {
-        self.as_mut().init_log_decoder(table_bytes, loc_bytes)
-    }
-
-    fn decode_log(&self, bytes: &[u8]) -> Result<Vec<DefmtLogEntry>, LogDecodingError> {
-        self.as_ref().decode_log(bytes)
-    }
-}
-
 /// Boilerplate macro to make a wrapper type of CundaDeviceBase into a
 /// proper protocol client. Still need to implement the protocol traits
 /// to explicitly opt-in to what endpoints/topics the rpc client supports
@@ -120,8 +103,46 @@ macro_rules! impl_protocol_client {
                 &self.0
             }
         }
+
+        impl $crate::rpc::FlutterWire for $name {
+            fn init(&mut self, _sink: $crate::frb_generated::StreamSink<Vec<u8>>) {
+                unreachable!("Base device should be initialized already");
+            }
+
+            async fn rx_callback(
+                &self,
+                data: &[u8],
+            ) -> Result<(), frb_prpc_juggle::client_interface::FrbPostcardRpcError> {
+                <Self as AsRef<$crate::cunda_device_base::CundaDeviceBase>>::as_ref(self)
+                    .rx_callback(data)
+                    .await
+            }
+        }
+
+        impl $crate::log_decoder::LogDecoder for $name {
+            fn init_log_decoder(
+                &mut self,
+                table_bytes: &[u8],
+                loc_bytes: &[u8],
+            ) -> Result<(), $crate::defmt_log_translation::LogDecodingError> {
+                self.as_mut().init_log_decoder(table_bytes, loc_bytes)
+            }
+
+            #[flutter_rust_bridge::frb(sync)]
+            fn decode_log(
+                &self,
+                bytes: &[u8],
+            ) -> Result<
+                Vec<$crate::defmt_log_translation::DefmtLogEntry>,
+                $crate::defmt_log_translation::LogDecodingError,
+            > {
+                <Self as AsRef<$crate::cunda_device_base::CundaDeviceBase>>::as_ref(self)
+                    .decode_log(bytes)
+            }
+        }
     };
 }
+
 pub(crate) use impl_protocol_client;
 
 // This is how we implement `ClientEndpointInterface` and `ClientTopicInterface`
