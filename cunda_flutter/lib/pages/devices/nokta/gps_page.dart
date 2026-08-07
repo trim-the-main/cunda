@@ -93,6 +93,15 @@ class ParsedGpsSection extends ConsumerWidget {
           SizedBox(height: 12),
           Text("Longitude"),
           Text(data.lon.toString()),
+          SizedBox(height: 12),
+          Text("SOG"),
+          Text(data.sog.toString()),
+          SizedBox(height: 12),
+          Text("COG"),
+          Text(data.cog.toString()),
+          SizedBox(height: 12),
+          Text("Number of Satelites"),
+          Text(data.numSatellitesUsed.toString()),
         ],
       ),
       error: (Object error, StackTrace stackTrace) {
@@ -138,7 +147,7 @@ class _RawNmeaSectionState extends ConsumerState<RawNmeaSection> {
 
     ref.listen(rawNmeaSentenceStreamProvider(widget.device), (prev, next) {
       next.whenData((value) {
-        _rawNmea.sink.add(value);
+        _rawNmea.sink.add(value.trim());
       });
     });
     return Column(
@@ -151,7 +160,7 @@ class _RawNmeaSectionState extends ConsumerState<RawNmeaSection> {
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         SizedBox(height: 12),
-        ConsoleLikeTextField(txtStream: _rawNmea.stream, rowCount: 4),
+        ConsoleLikeTextField(txtStream: _rawNmea.stream, rowCount: 10),
         SizedBox(height: 12),
       ],
     );
