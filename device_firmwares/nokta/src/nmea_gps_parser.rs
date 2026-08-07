@@ -45,8 +45,60 @@ impl<'a> NmeaGpsParserService<'a> {
             }
             Err(err) => match err {
                 NmeaParserError::Unsupported(_) | NmeaParserError::UnknownGnssType(_) => {}
-                _ => defmt::error!(
-                    "Nmea parse error on sentence: {}",
+                NmeaParserError::ASCII => defmt::error!(
+                    "Nmea parse ascii error on sentence: {}",
+                    core::str::from_utf8(sentence).unwrap()
+                ),
+                NmeaParserError::Utf8Decoding => defmt::error!(
+                    "Nmea parse utf8 error on sentence: {}",
+                    core::str::from_utf8(sentence).unwrap()
+                ),
+                NmeaParserError::ChecksumMismatch { calculated, found } => defmt::error!(
+                    "Nmea parse checksum mismatch error on sentence: {} calculated {} found {}",
+                    core::str::from_utf8(sentence).unwrap(),
+                    calculated,
+                    found,
+                ),
+                NmeaParserError::WrongSentenceHeader {
+                    expected: _,
+                    found: _,
+                } => defmt::error!(
+                    "Nmea parse wrong sentence header error on sentence: {}",
+                    core::str::from_utf8(sentence).unwrap()
+                ),
+                NmeaParserError::ParsingError(_) => defmt::error!(
+                    "Nmea parse error ParsingError on sentence: {}",
+                    core::str::from_utf8(sentence).unwrap()
+                ),
+                NmeaParserError::SentenceLength(_) => defmt::error!(
+                    "Nmea parse error SentenceLength on sentence: {}",
+                    core::str::from_utf8(sentence).unwrap()
+                ),
+                NmeaParserError::ParameterLength {
+                    max_length,
+                    parameter_length,
+                } => defmt::error!(
+                    "Nmea parse error ParameterLength on sentence: {} max_length {} param_length {}",
+                    core::str::from_utf8(sentence).unwrap(),
+                    max_length,
+                    parameter_length,
+                ),
+                NmeaParserError::Unknown(_) => defmt::error!(
+                    "Nmea parse error Unknown on sentence: {}",
+                    core::str::from_utf8(sentence).unwrap()
+                ),
+                NmeaParserError::EmptyNavConfig => defmt::error!(
+                    "Nmea parse error EmptyNavConfig on sentence: {}",
+                    core::str::from_utf8(sentence).unwrap()
+                ),
+                NmeaParserError::UnknownTalkerId { expected, found } => defmt::error!(
+                    "Nmea parse error UnknownTalkerId on sentence: {} expected {} found {}",
+                    core::str::from_utf8(sentence).unwrap(),
+                    expected,
+                    found
+                ),
+                NmeaParserError::DisabledSentence => defmt::error!(
+                    "Nmea parse error DisabledSentence on sentence: {}",
                     core::str::from_utf8(sentence).unwrap()
                 ),
             },
