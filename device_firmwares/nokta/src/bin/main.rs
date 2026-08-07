@@ -131,7 +131,7 @@ async fn ublox_gps_worker(i2c: SharedI2C<'static, I2CType>, rt_ctxt: &'static Ru
                 Err(_) => unreachable!("ublox do_work only returns DeviceDidNotRespond error"),
             };
         }
-        defmt::debug!("ublox publisher worked for {:?}\n", t_driver_work);
+        defmt::trace!("ublox publisher worked for {:?}\n", t_driver_work);
         if t_driver_work.as_millis() < READ_DELAY {
             Timer::after_millis(READ_DELAY - t_driver_work.as_millis()).await;
         } else {

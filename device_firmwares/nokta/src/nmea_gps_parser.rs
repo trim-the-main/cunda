@@ -41,10 +41,10 @@ impl<'a> NmeaGpsParserService<'a> {
     pub fn update_from_nmea(&mut self, sentence: &[u8]) {
         match self.data.update_with_sentence(sentence) {
             Ok(sent_ty) => {
-                defmt::info!("Success parsing {}", sent_ty);
+                defmt::trace!("Success parsing {}", sent_ty);
             }
             Err(err) => match err {
-                NmeaParserError::Unsupported(_) => {}
+                NmeaParserError::Unsupported(_) | NmeaParserError::UnknownGnssType(_) => {}
                 _ => defmt::error!(
                     "Nmea parse error on sentence: {}",
                     core::str::from_utf8(sentence).unwrap()

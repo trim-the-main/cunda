@@ -63,7 +63,7 @@ impl<'a, I2C: I2cTrait> UbloxNMEAPublisher<'a, I2C> {
             size_buf[0] -= 128;
         }
         let size: usize = ((size_buf[0] as u16) << 8 | (size_buf[1] as u16)).into();
-        defmt::debug!("Got size: {}", size);
+        defmt::trace!("Got size: {}", size);
         //
 
         let mut remaining_bytes: usize = if size > buf.len() {
