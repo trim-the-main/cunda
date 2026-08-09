@@ -59,7 +59,9 @@ FutureOr<List<BluetoothCharacteristic>> rpcCharacteristics(
   return rpcServiceCharacteristics;
 }
 
-Future<Stream<List<int>>> rxDataStream(BluetoothDevice device) async {
+Future<(BluetoothCharacteristic, BluetoothCharacteristic)> rxCharacteristics(
+  BluetoothDevice device,
+) async {
   final rpcServiceCharacteristics = await rpcCharacteristics(device);
   BluetoothCharacteristic toClientNotAcked;
   try {
@@ -81,25 +83,13 @@ Future<Stream<List<int>>> rxDataStream(BluetoothDevice device) async {
     _log.warning("No characteristic with UUID rpcToServerAckedCharUuid");
     throw NotRpcDeviceException(notFound: RpcUuid.toServerAcked);
   }
-  final mergedDataRx = StreamGroup.mergeBroadcast([
-    toClientNotAcked.onValueReceived,
-    toClientAcked.onValueReceived,
-  ]);
-
-  final logSub = mergedDataRx.listen((data) async {
-    _log.info("function rx from device: ${data.length} bytes");
-  });
-  device.cancelWhenDisconnected(logSub);
-  return mergedDataRx;
+  return (toClientNotAcked, toClientAcked);
 }
 
-Future<StreamSubscription<List<int>>> bleWire(
+Future<(BluetoothCharacteristic, BluetoothCharacteristic)> txCharacteristics(
   BluetoothDevice device,
-  FlutterWire wire,
 ) async {
-  final List<BluetoothCharacteristic> rpcServiceCharacteristics =
-      await rpcCharacteristics(device);
-  final timer = Stopwatch()..start();
+  final rpcServiceCharacteristics = await rpcCharacteristics(device);
   BluetoothCharacteristic toServerNotAcked;
   try {
     toServerNotAcked = rpcServiceCharacteristics
@@ -120,45 +110,20 @@ Future<StreamSubscription<List<int>>> bleWire(
     _log.warning("No characteristic with UUID rpcToServerAckedCharUuid");
     throw NotRpcDeviceException(notFound: RpcUuid.toServerAcked);
   }
-  BluetoothCharacteristic toClientNotAcked;
-  try {
-    toClientNotAcked = rpcServiceCharacteristics
-        .where(
-          (c) => c.characteristicUuid == RpcUuid.toClientNotAcked.guidValue,
-        )
-        .single;
-  } on StateError {
-    _log.warning("No characteristic with UUID rpcToClientNotAckedCharUuid");
-    throw NotRpcDeviceException(notFound: RpcUuid.toClientNotAcked);
-  }
 
-  BluetoothCharacteristic toClientAcked;
-  try {
-    toClientAcked = rpcServiceCharacteristics
-        .where((c) => c.characteristicUuid == RpcUuid.toClientAcked.guidValue)
-        .single;
-  } on StateError {
-    _log.warning("No characteristic with UUID rpcToClientAckedCharUuid");
-    throw NotRpcDeviceException(notFound: RpcUuid.toClientAcked);
-  }
-  _log.fine("Creating Rpc client");
+  return (toServerNotAcked, toServerAcked);
+}
 
-  // Send data to rust ffi using the callback
-  // It is important we wait for completion of the rxCallback,
-  // otherwise the data may reach out of order. There shouldn't be
-  // a second Future in flight before the first one completes.
-  final rxStreamSub = (await rxDataStream(device)).listen((data) async {
-    _log.fine("rx from device: ${data.length} bytes");
-    await wire.rxCallback(data: data);
-  });
-  device.cancelWhenDisconnected(rxStreamSub);
-  _log.fine("Subscribed to call rxCallback on wire");
-  final logSub = (await rxDataStream(device)).listen((data) async {
-    _log.info("rx from device: ${data.length} bytes");
-  });
-  device.cancelWhenDisconnected(logSub);
-  _log.fine("Subscribed to log");
-
+Future<StreamSubscription<List<int>>> bleWireTx(
+  BluetoothDevice device,
+  FlutterWire wire,
+) async {
+  final timer = Stopwatch()..start();
+  final (toServerNotAcked, toServerAcked) = await txCharacteristics(device);
+  _log.fine(
+    "Listing txCharacteristics took ${timer.elapsedMilliseconds} milliseconds",
+  );
+  timer.reset();
   // Data coming from the rust ffi uses the stream api
   // In flutter rust bridge, the generated code for function/method
   // calls usually have the same signature except when we're dealing
@@ -168,8 +133,8 @@ Future<StreamSubscription<List<int>>> bleWire(
   // long story short the stream is not generated in the rust code that
   // we write but rather in the flutter_rust_bridge generated code.
   final txStreamSub = wire.init().listen((data) async {
-    _log.fine("tx to device: ${data.length} bytes");
-    _log.fine("$data");
+    _log.finest("tx to device: ${data.length} bytes");
+    _log.finest("$data");
     final chunkSize = Platform.isLinux
         ? 251 - gattOverhead
         : device.mtuNow -
@@ -208,13 +173,42 @@ Future<StreamSubscription<List<int>>> bleWire(
   });
   device.cancelWhenDisconnected(txStreamSub);
 
+  _log.fine("wire.init took ${timer.elapsedMilliseconds} milliseconds");
+  return txStreamSub;
+}
+
+Future<StreamSubscription<List<int>>> bleWireRx(
+  BluetoothDevice device,
+  FlutterWire wire,
+) async {
+  // Send data to rust ffi using the callback
+  // It is important we wait for completion of the rxCallback,
+  // otherwise the data may reach out of order. There shouldn't be
+  // a second Future in flight before the first one completes.
+  final timer = Stopwatch()..start();
+  final (toClientNotAcked, toClientAcked) = await rxCharacteristics(device);
+  _log.fine("rxChar took ${timer.elapsedMilliseconds} milliseconds");
   timer.reset();
+  final mergedDataRx = StreamGroup.mergeBroadcast([
+    toClientNotAcked.onValueReceived,
+    toClientAcked.onValueReceived,
+  ]);
+  final rxStreamSub = mergedDataRx.listen((data) async {
+    await wire.rxCallback(data: data);
+  });
+  device.cancelWhenDisconnected(rxStreamSub);
+  _log.fine(
+    "Subscribed to call rxCallback on wire, took ${timer.elapsedMilliseconds} milliseconds",
+  );
+  timer.reset();
+
   if (!toClientAcked.isNotifying) {
     await toClientAcked.setNotifyValue(true);
   }
   if (!toClientNotAcked.isNotifying) {
     await toClientNotAcked.setNotifyValue(true);
   }
+
   _log.fine(
     "setting notifications took ${timer.elapsedMilliseconds} milliseconds",
   );

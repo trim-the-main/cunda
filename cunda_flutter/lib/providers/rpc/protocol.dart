@@ -58,14 +58,8 @@ FutureOr<(DeviceId, Object)> deviceIdProtocolClientPair(
     throw Exception("Not a recognized device, protocol pair");
   }
 
-  final newStream = await rxDataStream(device);
-  final newSub = newStream.listen((data) async {
-    _log.fine("rx from nokta device(newstream): ${data.length} bytes");
-    await protocolClient.rxCallback(data: data);
-  });
-  device.cancelWhenDisconnected(newSub);
-
-  _log.fine("Created new sub");
+  // Resetting the RX end of the wire as we moved the base client
+  await bleWireRx(device, protocolClient);
 
   if (protocolClient is CundaSysE) {
     await (protocolClient as CundaSysE).approveFirmware(req: NoArg());

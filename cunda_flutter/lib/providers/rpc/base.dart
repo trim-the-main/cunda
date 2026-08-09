@@ -25,7 +25,8 @@ FutureOr<(CundaDeviceBase, StreamSubscription)> temporaryBaseClient(
 
   final timer = Stopwatch()..start();
   final base = CundaDeviceBase();
-  final rxSubs = await bleWire(device, base);
+  await bleWireTx(device, base);
+  final rxSubs = await bleWireRx(device, base);
   _log.fine("Client creation took ${timer.elapsedMilliseconds} milliseconds");
   timer.reset();
 
