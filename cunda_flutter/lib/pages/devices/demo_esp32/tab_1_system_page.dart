@@ -13,6 +13,6 @@ class SystemTabPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     _log.fine("Building status tab page");
-    return SystemStatus(device: device);
+    return SystemStatusSection(device: device);
   }
 }

@@ -4,18 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class SystemsSettingsSection extends ConsumerStatefulWidget {
-  const SystemsSettingsSection({super.key, required this.device});
+class SystemSettingsSection extends ConsumerStatefulWidget {
+  const SystemSettingsSection({super.key, required this.device});
 
   final BluetoothDevice device;
 
   @override
-  ConsumerState<SystemsSettingsSection> createState() =>
-      _SystemsSettingsSectionState();
+  ConsumerState<SystemSettingsSection> createState() =>
+      _SystemSettingsSectionState();
 }
 
-class _SystemsSettingsSectionState
-    extends ConsumerState<SystemsSettingsSection> {
+class _SystemSettingsSectionState extends ConsumerState<SystemSettingsSection> {
   final bleDeviceNameController = TextEditingController();
 
   @override

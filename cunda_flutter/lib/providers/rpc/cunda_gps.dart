@@ -28,25 +28,10 @@ FutureOr<CundaGpsT> gpsTopics(Ref ref, BluetoothDevice device) async {
 
 @Riverpod(keepAlive: true, retry: noRetry)
 Stream<String> rawNmeaSentenceStream(Ref ref, BluetoothDevice device) async* {
-  final gpsD = await ref.watch(gpsEndpointsProvider(device).future);
-
   // Subscribe to the topic
   final tDispatcher = await ref.watch(gpsTopicsProvider(device).future);
   final rawNmeaStream = tDispatcher.createRawNmeaTopicStream();
 
-  await gpsD.startRawNmeaTopic(req: NoArg());
-  ref.onCancel(() async {
-    _log.fine("Stop raw nmea stream");
-    await gpsD.stopRawNmeaTopic(req: NoArg());
-  });
-  ref.onResume(() async {
-    _log.fine("Resume raw nmea stream");
-    await gpsD.startRawNmeaTopic(req: NoArg());
-  });
-  ref.onDispose(() async {
-    _log.fine("Disposing raw nmea stream");
-    await gpsD.stopRawNmeaTopic(req: NoArg());
-  });
   yield* rawNmeaStream.map((r) => r.field0);
 }
 
@@ -72,4 +57,32 @@ Stream<GpsDataWire> parsedGpsStream(Ref ref, BluetoothDevice device) async* {
     _log.fine("Disposing parsed gps stream");
   });
   yield* gpsDataStream;
+}
+
+@Riverpod()
+class RawNmeaTopicEnabled extends _$RawNmeaTopicEnabled {
+  @override
+  Future<bool> build(BluetoothDevice device) async {
+    state = AsyncValue.loading();
+    final gpsD = await ref.watch(gpsEndpointsProvider(device).future);
+    await gpsD.stopRawNmeaTopic(req: NoArg());
+    return false;
+  }
+
+  Future<void> set(bool value) async {
+    if (state == AsyncValue.data(value)) {
+      return;
+    }
+
+    state = AsyncValue.loading();
+    state = await AsyncValue.guard(() async {
+      final gpsD = await ref.read(gpsEndpointsProvider(device).future);
+      if (value) {
+        await gpsD.startRawNmeaTopic(req: NoArg());
+      } else {
+        await gpsD.stopRawNmeaTopic(req: NoArg());
+      }
+      return value;
+    });
+  }
 }

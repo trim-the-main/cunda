@@ -5,7 +5,6 @@ import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/defmt_log_tra
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/log_decoder.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/types.dart';
 import 'package:cunda_flutter/providers/package_registry_provider.dart';
-import 'package:cunda_flutter/providers/rpc/base.dart';
 import 'package:cunda_flutter/providers/rpc/cunda_sys.dart';
 import 'package:cunda_flutter/providers/rpc/protocol.dart';
 import 'package:cunda_flutter/services/mayna/mayna_types.dart';

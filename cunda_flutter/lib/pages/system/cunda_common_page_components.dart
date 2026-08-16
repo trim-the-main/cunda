@@ -1,5 +1,7 @@
 import 'package:cunda_flutter/pages/system/logs_page.dart';
 import 'package:cunda_flutter/pages/system/ota_page.dart';
+import 'package:cunda_flutter/pages/system/settings_page.dart';
+import 'package:cunda_flutter/pages/system/system_status_page.dart';
 import 'package:cunda_flutter/providers/ble/ble_providers.dart';
 import 'package:cunda_flutter/utils/bluetooth_device_extension.dart';
 import 'package:flutter/material.dart';
@@ -20,7 +22,9 @@ abstract interface class DotMenuAction {
 
 enum CundaCommonAction implements DotMenuAction {
   logs(label: 'Logs', pageBuilder: _logsPageBuilder),
-  ota(label: 'Firmware Update', pageBuilder: _otaPageBuilder);
+  ota(label: 'Firmware Update', pageBuilder: _otaPageBuilder),
+  settings(label: 'Settings', pageBuilder: _settingsPageBuilder),
+  sysStats(label: 'System Stats', pageBuilder: _sysStatsPageBuilder);
 
   const CundaCommonAction({required this.label, required this.pageBuilder});
 
@@ -28,6 +32,12 @@ enum CundaCommonAction implements DotMenuAction {
   final String label;
   @override
   final PageBuilder pageBuilder;
+
+  static Widget _sysStatsPageBuilder(BuildContext _, BluetoothDevice device) =>
+      SystemStatusPage(device: device);
+
+  static Widget _settingsPageBuilder(BuildContext _, BluetoothDevice device) =>
+      SettingsPage(device: device);
 
   static Widget _otaPageBuilder(BuildContext _, BluetoothDevice device) =>
       OtaPage(device: device);

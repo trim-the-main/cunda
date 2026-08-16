@@ -25,7 +25,7 @@ class FakeDevicePage extends StatelessWidget {
         body: TabBarView(
           children: [
             Center(child: Text("Fake Application Page")),
-            SystemStatus(device: device),
+            SystemStatusSection(device: device),
           ],
         ),
       ),

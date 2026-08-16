@@ -25,7 +25,7 @@ class TirbodDevicePage extends StatelessWidget {
         body: TabBarView(
           children: [
             Center(child: Text("Tirbod Application Page")),
-            SystemStatus(device: device),
+            SystemStatusSection(device: device),
           ],
         ),
       ),

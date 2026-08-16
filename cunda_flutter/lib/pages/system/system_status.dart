@@ -14,8 +14,8 @@ import 'package:logging/logging.dart';
 
 final _log = Logger('SystemStatus');
 
-class SystemStatus extends StatelessWidget {
-  const SystemStatus({super.key, required this.device});
+class SystemStatusSection extends StatelessWidget {
+  const SystemStatusSection({super.key, required this.device});
 
   final BluetoothDevice device;
 
@@ -23,7 +23,6 @@ class SystemStatus extends StatelessWidget {
   Widget build(BuildContext context) {
     _log.fine("Building system status widget");
     final List<Widget> statusTiles = [
-      BluetoothConnectionStatusCard(device: device),
       DeviceHealth(device: device),
       StatusTableWidget(device: device),
       SysStatsWidget(device: device),

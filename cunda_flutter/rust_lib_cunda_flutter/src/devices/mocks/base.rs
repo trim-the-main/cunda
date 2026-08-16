@@ -4,9 +4,11 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
+use chrono::{NaiveDate, NaiveTime};
 use frb_prpc_juggle::client_interface::{
     ClientEndpointInterface, ClientTopicInterface, FrbPostcardRpcError, TopicSink,
 };
+use nmea_ubx_gps::datetime_wrappers::{WireDate, WireTime};
 use postcard_rpc::{Key, Topic};
 use protocol::cunda_common::v1::topics::gps::{ParsedGpsTopic, RawNmeaTopic};
 use protocol::cunda_common::v1::types::{GpsDataWire, RawNmea0183Sentence};
@@ -359,8 +361,28 @@ impl CundaGpsT for MockClient {
         sink: StreamSink<GpsDataWire>,
     ) -> Result<(), FrbPostcardRpcError> {
         let parsed_gps_stream = helpers::PeriodicTopicOutput::<GpsDataWire, _>::new(
-            [GpsDataWire::default()],
-            core::time::Duration::from_secs(1),
+            [
+                GpsDataWire {
+                    fix_type: nmea_ubx_gps::pvt::FixType::Fix3D,
+                    utc_date: Some(WireDate(NaiveDate::from_ymd_opt(2026, 01, 01).unwrap())),
+                    utc_time: Some(WireTime(NaiveTime::from_hms_opt(13, 35, 22).unwrap())),
+                    lat: Some(356532346),
+                    lon: Some(262456783),
+                    h_msl: None,
+                    h_acc: None,
+                    v_acc: None,
+                    pdop: None,
+                    sog: Some(2468),
+                    cog: Some(212400),
+                    s_acc: None,
+                    c_acc: None,
+                    mag_decl: None,
+                    mag_decl_acc: None,
+                    num_satellites_used: 5,
+                },
+                GpsDataWire::default(),
+            ],
+            core::time::Duration::from_secs(10),
         );
 
         let mut streams_running_status_guard = self.streams_running_status.lock().await;
