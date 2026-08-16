@@ -89,9 +89,9 @@ class _LogListViewState extends ConsumerState<_LogListView> {
     } catch (e) {
       _log.warning('Failed to import .mayna package: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Import failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Import failed: $e')));
       }
     } finally {
       if (mounted) setState(() => _importing = false);
