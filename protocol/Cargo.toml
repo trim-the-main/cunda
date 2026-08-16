@@ -14,11 +14,11 @@ pastey = "0.2.1"
 heapless = { version = "0.9.2", features = ["serde"] }
 
 chrono = { version = "0.4", optional = true }
-nmea_ubx_gps = { path = "../nmea_ubx_gps", default-features = false }
+nmea_ubx_gps = { path = "../nmea_ubx_gps", features = ["defmt", "embassy-time"]}
 
 flutter_rust_bridge = { version = "=2.11.1", optional = true }
 [features]
-flutter = [ "dep:frb_prpc_juggle", "dep:chrono", "dep:flutter_rust_bridge"]
+flutter = [ "dep:frb_prpc_juggle", "dep:chrono", "dep:flutter_rust_bridge", "nmea_ubx_gps/std"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

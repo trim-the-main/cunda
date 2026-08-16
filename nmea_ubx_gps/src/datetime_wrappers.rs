@@ -1,16 +1,16 @@
 use postcard_schema::{
-    Schema,
     schema::{DataModelType, NamedType, NamedValue},
+    Schema,
 };
 use serde::{Deserialize, Serialize};
 
 /// Wrappers for Date and time that implement postcard-schema
 
-#[cfg_attr(feature = "no-std", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct WireDate(pub chrono::NaiveDate);
 
-#[cfg_attr(feature = "no-std", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct WireTime(pub chrono::NaiveTime);
 

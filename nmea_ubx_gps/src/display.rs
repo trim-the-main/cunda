@@ -1,6 +1,6 @@
 use core::fmt::Display;
 
-#[cfg(feature = "no-std")]
+#[cfg(not(feature = "std"))]
 use num_traits::float::FloatCore;
 
 pub struct Latitude(pub f64);

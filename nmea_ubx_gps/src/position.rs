@@ -5,7 +5,7 @@ use core::{
 
 use crate::helpers::{try_f32_to_i32, try_f32_to_u16, try_f64_to_i32};
 
-#[cfg_attr(feature = "no-std", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GpsPosition {
     /// 1e-7 degrees

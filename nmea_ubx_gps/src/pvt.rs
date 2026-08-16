@@ -1,8 +1,11 @@
-#[cfg(feature = "no-std")]
+#[cfg(feature = "embassy-time")]
 use embassy_time::Instant;
-#[cfg(not(feature = "no-std"))]
+#[cfg(feature = "std")]
 static START: std::sync::LazyLock<std::time::Instant> =
     std::sync::LazyLock::new(std::time::Instant::now);
+
+#[cfg(not(any(feature = "embassy-time", feature = "std")))]
+compile_error!("you must enable exactly one of `std` or `embassy-time`");
 
 use core::num::NonZeroU64;
 use serde::{Deserialize, Serialize};
@@ -17,7 +20,7 @@ use crate::{
 
 use nmea::{ParseResult, SentenceType};
 
-#[cfg_attr(feature = "no-std", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct GpsData {
     /// in nanoseconds since the boot
@@ -34,7 +37,7 @@ pub struct GpsData {
     pub num_satellites_used: u8,
 }
 
-#[cfg_attr(feature = "no-std", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MagneticDeclination {
     /// magnetic declination 1e-2 degrees
@@ -44,7 +47,7 @@ pub struct MagneticDeclination {
     pub acc: u16,
 }
 
-#[cfg_attr(feature = "no-std", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Schema)]
 pub enum FixType {
     #[default]
@@ -75,13 +78,13 @@ impl<'a> GpsData {
         Default::default()
     }
 
-    #[cfg(feature = "no-std")]
+    #[cfg(feature = "embassy-time")]
     pub fn updated_at(&self) -> Option<Instant> {
         self.updated_at
             .map(|nanos| Instant::from_nanos(nanos.into()))
     }
 
-    #[cfg(not(feature = "no-std"))]
+    #[cfg(feature = "std")]
     pub fn updated_at(&self) -> Option<std::time::Duration> {
         self.updated_at
             .map(|nanos| std::time::Duration::from_nanos(nanos.into()))
@@ -172,12 +175,12 @@ impl<'a> GpsData {
         };
     }
 
-    #[cfg(feature = "no-std")]
+    #[cfg(feature = "embassy-time")]
     fn now() -> u64 {
         Instant::now().as_nanos()
     }
 
-    #[cfg(not(feature = "no-std"))]
+    #[cfg(feature = "std")]
     fn now() -> u64 {
         START.elapsed().as_nanos() as u64
     }

@@ -79,7 +79,7 @@ trouble-host = { version = "0.6.0", features = [
   "peripheral",
 ] }
 
-nmea_ubx_gps = { path = "../../nmea_ubx_gps", features = ["no-std"] }
+nmea_ubx_gps = { path = "../../nmea_ubx_gps", features = ["embassy-time", "defmt"] }
 
 [profile.dev]
 # Rust debug is too slow.
