@@ -65,7 +65,7 @@ postcard-rpc = { git = "https://github.com/trim-the-main/postcard-rpc", features
   "defmt",
   "embedded-io-async-0_6-executor-0_10-server",
 ] }
-protocol = { path = "../../protocol" }  # Endpoint and Topic definitions
+protocol = { path = "../../protocol", features = ["defmt"] }  # Endpoint and Topic definitions
 sequential-storage = { version = "7.1.0", features = [
   "alloc",
   "defmt",
@@ -79,7 +79,7 @@ trouble-host = { version = "0.6.0", features = [
   "peripheral",
 ] }
 
-nmea_ubx_gps = { path = "../../nmea_ubx_gps", features = ["embassy-time", "defmt"] }
+nmea_ubx_gps = { path = "../../nmea_ubx_gps", features = ["defmt"] }
 
 [profile.dev]
 # Rust debug is too slow.

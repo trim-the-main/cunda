@@ -1,11 +1,8 @@
-#[cfg(feature = "embassy-time")]
+#[cfg(not(feature = "std"))]
 use embassy_time::Instant;
 #[cfg(feature = "std")]
 static START: std::sync::LazyLock<std::time::Instant> =
     std::sync::LazyLock::new(std::time::Instant::now);
-
-#[cfg(not(any(feature = "embassy-time", feature = "std")))]
-compile_error!("you must enable exactly one of `std` or `embassy-time`");
 
 use core::num::NonZeroU64;
 use serde::{Deserialize, Serialize};
@@ -78,7 +75,7 @@ impl<'a> GpsData {
         Default::default()
     }
 
-    #[cfg(feature = "embassy-time")]
+    #[cfg(not(feature = "std"))]
     pub fn updated_at(&self) -> Option<Instant> {
         self.updated_at
             .map(|nanos| Instant::from_nanos(nanos.into()))
@@ -175,7 +172,7 @@ impl<'a> GpsData {
         };
     }
 
-    #[cfg(feature = "embassy-time")]
+    #[cfg(not(feature = "std"))]
     fn now() -> u64 {
         Instant::now().as_nanos()
     }
