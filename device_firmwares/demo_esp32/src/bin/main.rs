@@ -49,7 +49,8 @@ async fn main(spawner: Spawner) -> ! {
     esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 98768);
 
     let timg0 = TimerGroup::new(peripherals.TIMG0);
-    esp_rtos::start(timg0.timer0);
+    let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
+    esp_rtos::start(timg0.timer0, sw_int.software_interrupt0);
 
     defmt::info!("Embassy initialized on Core 0");
 
@@ -60,17 +61,15 @@ async fn main(spawner: Spawner) -> ! {
 
     static APP_CORE_STACK: StaticCell<Stack<16384>> = StaticCell::new();
     let app_core_stack = APP_CORE_STACK.init(Stack::new());
-    let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     esp_rtos::start_second_core(
         peripherals.CPU_CTRL,
-        sw_int.software_interrupt0,
         sw_int.software_interrupt1,
         app_core_stack,
         move || {
             static EXECUTOR: StaticCell<Executor> = StaticCell::new();
             let executor = EXECUTOR.init(Executor::new());
             executor.run(|spawner| {
-                spawner.must_spawn(second_cpu_main());
+                spawner.spawn(second_cpu_main().expect("Failed to start the second CPU task"));
             });
         },
     );
