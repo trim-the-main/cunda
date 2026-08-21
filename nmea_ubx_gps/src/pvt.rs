@@ -1,5 +1,7 @@
 #[cfg(not(feature = "std"))]
 use embassy_time::Instant;
+#[cfg(feature = "ublox-m10")]
+use ublox::nav_pvt::proto33::NavPvtRef;
 #[cfg(feature = "std")]
 static START: std::sync::LazyLock<std::time::Instant> =
     std::sync::LazyLock::new(std::time::Instant::now);
@@ -87,6 +89,77 @@ impl<'a> GpsData {
             .map(|nanos| std::time::Duration::from_nanos(nanos.into()))
     }
 
+    #[cfg(feature = "ublox-m10")]
+    pub fn update_with_ubx_nav_pvt(
+        &mut self,
+        packet_ref: NavPvtRef,
+    ) -> Result<(), ublox::ParserError> {
+        use chrono::{NaiveDate, NaiveTime};
+
+        let Some(mut pos) =
+            GpsPosition::try_new(packet_ref.latitude_raw(), packet_ref.longitude_raw())
+        else {
+            return Err(ublox::ParserError::InvalidField {
+                packet: "NavPvt",
+                field: "LatLon",
+            });
+        };
+        pos.set_h_msl(Some(packet_ref.height_msl_raw()));
+        pos.set_pdop(packet_ref.pdop_raw());
+        pos.with_h_acc(packet_ref.horizontal_accuracy_raw());
+        pos.with_v_acc(packet_ref.vertical_accuracy_raw());
+
+        let Some(mut vel) = GpsVelocity::try_new(
+            packet_ref.ground_speed_2d_raw(),
+            packet_ref.heading_motion_raw(),
+        ) else {
+            return Err(ublox::ParserError::InvalidField {
+                packet: "NavPvt",
+                field: "Velocity",
+            });
+        };
+        vel.set_s_acc(packet_ref.speed_accuracy_raw());
+        vel.set_c_acc(packet_ref.heading_accuracy_raw());
+
+        self.fix_type = match packet_ref.fix_type() {
+            ublox::GnssFixType::NoFix => FixType::NoFix,
+            ublox::GnssFixType::DeadReckoningOnly => FixType::DeadReckoningOnly,
+            ublox::GnssFixType::Fix2D => FixType::Fix2D,
+            ublox::GnssFixType::Fix3D => FixType::Fix3D,
+            ublox::GnssFixType::GPSPlusDeadReckoning => FixType::GnssPlusDeadReckoning,
+            ublox::GnssFixType::TimeOnlyFix => FixType::TimeOnlyFix,
+            _ => {
+                return Err(ublox::ParserError::InvalidField {
+                    packet: "NavPvt",
+                    field: "fixtype",
+                });
+            }
+        };
+        self.utc_date = NaiveDate::from_ymd_opt(
+            packet_ref.year() as i32,
+            packet_ref.month() as u32,
+            packet_ref.day() as u32,
+        )
+        .map(|d| d.into());
+        self.utc_time = NaiveTime::from_hms_opt(
+            packet_ref.hour() as u32,
+            packet_ref.min() as u32,
+            packet_ref.sec() as u32,
+        )
+        .map(|t| t.into());
+
+        self.pos = Some(pos);
+        self.vel = Some(vel);
+        self.mag = Some(MagneticDeclination {
+            decl: packet_ref.magnetic_declination_raw(),
+            acc: packet_ref.magnetic_declination_accuracy_raw(),
+        });
+
+        self.num_satellites_used = packet_ref.num_satellites();
+        self.updated_at = NonZeroU64::new(Self::now());
+        Ok(())
+    }
+
     pub fn update_with_sentence(
         &mut self,
         sentence: &'a [u8],
@@ -151,7 +224,7 @@ impl<'a> GpsData {
         let longitude = rmc.lon.unwrap();
 
         self.utc_time = rmc.fix_time.map(|t| t.into());
-        self.utc_date = rmc.fix_date.map(|t| t.into());
+        self.utc_date = rmc.fix_date.map(|d| d.into());
         self.updated_at = NonZeroU64::new(Self::now());
 
         let Some(pos) = GpsPosition::try_from_floats(latitude, longitude, None, None) else {

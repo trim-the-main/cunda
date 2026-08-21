@@ -26,7 +26,7 @@ use nokta::ble::ble_init;
 use nokta::context::RuntimeContext;
 use nokta::i2c::defs::{I2CType, SharedI2C};
 use nokta::nmea_gps_parser::{NmeaGpsParserService, nmea_consumer_service_run_to_completion};
-use nokta::ublox_nmea_service::{UbloxNMEAPublisher, UbloxNMEAPublisherError};
+use nokta::ublox_nmea_service::{UbloxPublisher, UbloxPublisherError};
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
@@ -92,10 +92,10 @@ async fn main(spawner: Spawner) -> ! {
                     ublox_gps_worker(i2c_bus.clone(), rt_ctxt)
                         .expect("Failed to spawn ublox_gps_worker"),
                 );
-                spawner.spawn(
-                    nmea_gps_parser_worker(rt_ctxt)
-                        .expect("Failed to spawn nmea_gps_parser_worker"),
-                );
+                // spawner.spawn(
+                //     nmea_gps_parser_worker(rt_ctxt)
+                //         .expect("Failed to spawn nmea_gps_parser_worker"),
+                // );
             });
         },
     );
@@ -113,7 +113,8 @@ async fn ublox_gps_worker(i2c: SharedI2C<'static, I2CType>, rt_ctxt: &'static Ru
     const READ_DELAY: u64 = 500;
     defmt::info!("ublox pub worker has started");
 
-    let mut ublox_publisher = UbloxNMEAPublisher::new(i2c, rt_ctxt);
+    let mut ublox_publisher = UbloxPublisher::new(i2c, rt_ctxt);
+    ublox_publisher.configure_ubx().await;
 
     loop {
         let mut t_driver_work = Duration::from_micros(0);
@@ -122,7 +123,7 @@ async fn ublox_gps_worker(i2c: SharedI2C<'static, I2CType>, rt_ctxt: &'static Ru
             match ublox_publisher.do_work().await {
                 Ok(true) => t_driver_work += Instant::now() - t0,
                 Ok(false) => break,
-                Err(UbloxNMEAPublisherError::DeviceDidNotRespond) => {
+                Err(UbloxPublisherError::DeviceDidNotRespond) => {
                     defmt::warn!(
                         "Ublox device did not respond, assuming it is disconnected. Shutting down the worker"
                     );

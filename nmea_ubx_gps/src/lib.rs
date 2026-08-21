@@ -7,4 +7,7 @@ pub mod position;
 pub mod pvt;
 pub mod velocity;
 
+#[cfg(feature = "ublox-m10")]
+pub mod ubx;
+
 pub use nmea::Error as NmeaParserError;

@@ -10,13 +10,15 @@ num-traits = { version = "0.2.19", default-features = false }
 
 serde = { version = "1.0.228", default-features = false }
 nmea = { version = "0.7.0", default-features = false, features = ["all-sentences"] }
-ublox = { version = "0.10.0", default-features = false, features = ["alloc", "serde", "ubx_proto33"] }
 chrono = { version = "0.4", default-features = false, features = ["serde"] }
 defmt = { version = "1.0.1", optional = true }
 postcard-schema = { version = "0.2", features = ["chrono-v0_4", "derive"] }
-
 pastey = "0.2.1"
+
+ublox = { git="https://github.com/trim-the-main/ublox", default-features = false, features = ["alloc", "serde", "ubx_proto33"], optional = true }
 
 [features]
 std = []
+default = ["ublox-m10"]
+ublox-m10 = ["dep:ublox"]
 defmt = ["dep:defmt", "nmea/defmt-03", "chrono/defmt"]

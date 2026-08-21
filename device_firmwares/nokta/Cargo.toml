@@ -22,7 +22,7 @@ embassy-executor = { version = "0.10.0", features = ["defmt", "trace"] }
 embassy-futures = { version = "0.1.2", features = ["defmt"] }
 embassy-sync = { version = "0.7.2", features = ["defmt"] }
 embassy-time = { version = "0.5.0", features = ["defmt"] }
-embedded-hal-async = { version = "1.0.0" }
+embedded-hal-async = { version = "1.0.0", features = ["defmt-03"] }
 embedded-io = { version = "0.7.1", features = ["defmt"] }
 embedded-io-async = { version = "0.7.0", features = ["defmt"] }
 embedded-storage = "0.3.1"
@@ -79,7 +79,9 @@ trouble-host = { version = "0.6.0", features = [
   "peripheral",
 ] }
 
-nmea_ubx_gps = { path = "../../nmea_ubx_gps", features = ["defmt"] }
+nmea_ubx_gps = { path = "../../nmea_ubx_gps", features = ["defmt", "ublox-m10"] }
+
+ublox = { git="https://github.com/trim-the-main/ublox", default-features = false, features = ["alloc", "serde", "ubx_proto33"] }
 
 [profile.dev]
 # Rust debug is too slow.

@@ -1,8 +1,4 @@
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pubsub::PubSubChannel};
-
-use nmea_ubx_gps::pvt::GpsData;
-
-// use crate::screen_service::ScreenPages;
+use embassy_sync::pubsub::PubSubChannel;
 
 pub mod nmea_data_bus {
     use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pubsub};
@@ -35,6 +31,22 @@ pub mod nmea_data_bus {
     >;
 }
 
+pub mod gps_data_bus {
+    use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pubsub};
+    use nmea_ubx_gps::pvt::GpsData;
+
+    const CAPACITY: usize = 5;
+    const PUBLISHERS: usize = 5;
+    const SUBSCRIBERS: usize = 5;
+
+    pub type Channel =
+        pubsub::PubSubChannel<CriticalSectionRawMutex, GpsData, CAPACITY, SUBSCRIBERS, PUBLISHERS>;
+    pub type Subscriber<'a> =
+        pubsub::Subscriber<'a, CriticalSectionRawMutex, GpsData, CAPACITY, SUBSCRIBERS, PUBLISHERS>;
+    pub type Publisher<'a> =
+        pubsub::Publisher<'a, CriticalSectionRawMutex, GpsData, CAPACITY, SUBSCRIBERS, PUBLISHERS>;
+}
+
 // pub mod temperature_data_bus {
 //     use crate::temperature_service::TemperatureSensorTable;
 //     use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, watch};
@@ -46,7 +58,7 @@ pub mod nmea_data_bus {
 
 pub struct RuntimeContext {
     // Put all the state that requires to be passed around or slept on here:
-    pub gps_broadcast_channel: PubSubChannel<CriticalSectionRawMutex, GpsData, 5, 5, 5>,
+    pub gps_broadcast_channel: gps_data_bus::Channel,
     // pub screen_page: Watch<CriticalSectionRawMutex, ScreenPages, 3>,
     pub nmea_bcast_channel: nmea_data_bus::Channel,
     // pub temperature_billboard: temperature_data_bus::BillBoard,
