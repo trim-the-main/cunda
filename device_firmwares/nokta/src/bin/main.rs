@@ -11,10 +11,12 @@ use embassy_executor::Spawner;
 use embassy_time::{Duration, Instant, Timer};
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
+use esp_hal::gpio::{Input, InputConfig};
 use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::system::Stack;
 use esp_hal::time::Rate;
 use esp_hal::timer::timg::TimerGroup;
+use esp_hal::uart::Uart;
 use esp_rtos::embassy::Executor;
 use static_cell::StaticCell;
 
@@ -92,10 +94,22 @@ async fn main(spawner: Spawner) -> ! {
                     ublox_gps_worker(i2c_bus.clone(), rt_ctxt)
                         .expect("Failed to spawn ublox_gps_worker"),
                 );
-                // spawner.spawn(
-                //     nmea_gps_parser_worker(rt_ctxt)
-                //         .expect("Failed to spawn nmea_gps_parser_worker"),
-                // );
+
+                if let Ok(uart1) = Uart::new(
+                    peripherals.UART1,
+                    esp_hal::uart::Config::default().with_baudrate(38000),
+                ) {
+                    let uart1 = uart1
+                        .with_rx(peripherals.GPIO18)
+                        .with_tx(peripherals.GPIO19)
+                        .into_async();
+                    spawner.spawn(
+                        uart_writer_worker(uart1, rt_ctxt)
+                            .expect("Failed to spawn nmea_gps_parser_worker"),
+                    );
+                } else {
+                    defmt::error!("Failed to create UART");
+                }
             });
         },
     );
@@ -149,4 +163,40 @@ async fn nmea_gps_parser_worker(rt_ctxt: &'static RuntimeContext) {
     nmea_consumer_service_run_to_completion(srv).await;
 
     unreachable!("ublox subscriber should not return");
+}
+
+#[embassy_executor::task]
+async fn uart_writer_worker(
+    mut uart: Uart<'static, esp_hal::Async>,
+    rt_ctxt: &'static RuntimeContext,
+) {
+    let mut nmea_sub = rt_ctxt
+        .nmea_bcast_channel
+        .subscriber()
+        .expect("Could not subscribe to nmea channel");
+    loop {
+        let msg = nmea_sub.next_message().await;
+        match msg {
+            embassy_sync::pubsub::WaitResult::Lagged(x) => {
+                defmt::warn!("uart worker lagged {} messages", x)
+            }
+            embassy_sync::pubsub::WaitResult::Message(sentence_bytes) => {
+                let mut remaining_bytes = sentence_bytes.len();
+                while remaining_bytes > 0 {
+                    match uart.write_async(&sentence_bytes).await {
+                        Ok(written_bytes) => {
+                            remaining_bytes -= written_bytes;
+                        }
+                        Err(err) => {
+                            defmt::error!("Failed to write bytes to Uart interface: {}", err);
+                        }
+                    }
+                }
+                match uart.flush_async().await {
+                    Ok(_) => {}
+                    Err(err) => defmt::error!("Error flushing uart {}", err),
+                };
+            }
+        }
+    }
 }
