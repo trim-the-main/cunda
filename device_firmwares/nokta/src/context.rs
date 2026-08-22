@@ -47,21 +47,21 @@ pub mod gps_data_bus {
         pubsub::Publisher<'a, CriticalSectionRawMutex, GpsData, CAPACITY, SUBSCRIBERS, PUBLISHERS>;
 }
 
-// pub mod temperature_data_bus {
-//     use crate::temperature_service::TemperatureSensorTable;
-//     use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, watch};
+pub mod temperature_data_bus {
+    use crate::temperature_service::TemperatureSensorTable;
+    use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, watch};
 
-//     pub type BillBoard = watch::Watch<CriticalSectionRawMutex, TemperatureSensorTable, 4>;
-//     pub type Announcer<'a> = watch::Sender<'a, CriticalSectionRawMutex, TemperatureSensorTable, 4>;
-//     pub type Follower<'a> = watch::Receiver<'a, CriticalSectionRawMutex, TemperatureSensorTable, 4>;
-// }
+    pub type BillBoard = watch::Watch<CriticalSectionRawMutex, TemperatureSensorTable, 4>;
+    pub type Announcer<'a> = watch::Sender<'a, CriticalSectionRawMutex, TemperatureSensorTable, 4>;
+    pub type Follower<'a> = watch::Receiver<'a, CriticalSectionRawMutex, TemperatureSensorTable, 4>;
+}
 
 pub struct RuntimeContext {
     // Put all the state that requires to be passed around or slept on here:
     pub gps_broadcast_channel: gps_data_bus::Channel,
     // pub screen_page: Watch<CriticalSectionRawMutex, ScreenPages, 3>,
     pub nmea_bcast_channel: nmea_data_bus::Channel,
-    // pub temperature_billboard: temperature_data_bus::BillBoard,
+    pub temperature_billboard: temperature_data_bus::BillBoard,
 }
 
 impl RuntimeContext {
@@ -70,7 +70,7 @@ impl RuntimeContext {
             gps_broadcast_channel: PubSubChannel::new(),
             // screen_page: Watch::new_with(ScreenPages::VersionPage),
             nmea_bcast_channel: nmea_data_bus::Channel::new(),
-            // temperature_billboard: temperature_data_bus::BillBoard::new(),
+            temperature_billboard: temperature_data_bus::BillBoard::new(),
         }
     }
 }

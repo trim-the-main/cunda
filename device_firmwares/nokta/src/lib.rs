@@ -15,7 +15,7 @@ pub mod i2c;
 // pub mod oled_screen;
 // pub mod screen_service;
 
-// pub mod temperature_service;
+pub mod temperature_service;
 
 pub mod ublox_nmea_service; // Read nmea sentences from ublox device, publish them on the nmea channel
 

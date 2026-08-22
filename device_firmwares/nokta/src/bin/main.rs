@@ -14,16 +14,20 @@ use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
 use esp_hal::gpio::{Input, InputConfig};
 use esp_hal::interrupt::software::SoftwareInterruptControl;
+use esp_hal::rmt::Rmt;
 use esp_hal::system::Stack;
 use esp_hal::time::Rate;
 use esp_hal::timer::timg::TimerGroup;
 use esp_hal::uart::Uart;
 use esp_rtos::embassy::Executor;
+use nokta::temperature_service::TemperatureService;
 use static_cell::StaticCell;
 
 extern crate alloc;
 
 use maitake_sync::Mutex;
+
+use esp_hal_rmt_onewire::OneWire;
 
 use nokta::ble::ble_init;
 use nokta::context::RuntimeContext;
@@ -112,6 +116,16 @@ async fn main(spawner: Spawner) -> ! {
                 } else {
                     defmt::error!("Failed to create UART");
                 }
+                let rmt = Rmt::new(peripherals.RMT, Rate::from_mhz(80_u32))
+                    .unwrap()
+                    .into_async();
+                spawner.spawn(
+                    temperature_worker(
+                        OneWire::new(rmt.channel0, rmt.channel2, peripherals.GPIO4).unwrap(),
+                        rt_ctxt,
+                    )
+                    .expect("Failed to spawn temp worker"),
+                );
             });
         },
     );
@@ -216,5 +230,16 @@ async fn uart_writer_worker(
                 };
             }
         }
+    }
+}
+
+#[embassy_executor::task]
+async fn temperature_worker(ow: OneWire<'static>, rt_ctxt: &'static RuntimeContext) {
+    defmt::info!("Temperature worker starting");
+
+    let mut srv = TemperatureService::new(ow, rt_ctxt);
+    loop {
+        srv.read_sensors_and_announce().await;
+        Timer::after_secs(10).await;
     }
 }

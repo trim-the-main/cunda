@@ -83,6 +83,9 @@ nmea_ubx_gps = { path = "../../nmea_ubx_gps", features = ["defmt", "ublox-m10"] 
 
 ublox = { git="https://github.com/trim-the-main/ublox", default-features = false, features = ["alloc", "serde", "ubx_proto33"] }
 
+esp-hal-rmt-onewire = { version = "0.3.2", git="https://github.com/trim-the-main/esp-hal-rmt-onewire", features=["defmt"] }
+fixed = "1.28.0"
+
 [profile.dev]
 # Rust debug is too slow.
 # For debug builds always builds with some optimization
