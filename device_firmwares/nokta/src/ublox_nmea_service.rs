@@ -285,3 +285,127 @@ impl<'a, I2C: I2cTrait> UbloxPublisher<'a, I2C> {
         Ok(true)
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    enum MockI2CError {}
+
+    impl embedded_hal_async::i2c::Error for MockI2CError {
+        fn kind(&self) -> ErrorKind {
+            embedded_hal_async::i2c::ErrorKind::Other
+        }
+    }
+
+    struct MockUbloxI2C {
+        buf: Vec<Vec<u8>>,
+    }
+
+    impl embedded_hal_async::i2c::ErrorType for MockUbloxI2C {
+        type Error = MockI2CError;
+    }
+
+    impl I2cTrait for MockUbloxI2C {
+        async fn transaction(
+            &mut self,
+            _address: u8,
+            _operations: &mut [embedded_hal_async::i2c::Operation<'_>],
+        ) -> Result<(), Self::Error> {
+            unimplemented!("Not implemented for MockI2C")
+        }
+
+        async fn read(&mut self, _address: u8, _read: &mut [u8]) -> Result<(), Self::Error> {
+            unimplemented!("Not implemented for MockI2C")
+        }
+
+        async fn write(&mut self, address: u8, write: &[u8]) -> Result<(), Self::Error> {
+            assert_eq!(address, Self::ADDRESS);
+            Ok(())
+        }
+
+        async fn write_read(
+            &mut self,
+            address: u8,
+            write: &[u8],
+            read: &mut [u8],
+        ) -> Result<(), Self::Error> {
+            assert_eq!(address, Self::ADDRESS);
+            if write.len() == 1 {
+                if write[0] == 0xFD {
+                    // asking for size
+                    // let size: usize = ((size_buf[0] as u16) << 8 | (size_buf[1] as u16)).into();
+                    assert!(read.len() >= 2);
+                    let size = match self.next_avail_data() {
+                        Some(data) => data.len(),
+                        None => 0,
+                    } as u16;
+                    read[0] = size >> 8;
+                    read[1] = size & 0x00FF;
+                    return Ok(());
+                } else if write[0] == 0xFF {
+                    let data = self.read_n_bytes(read.len());
+                    read.copy_from_slice(data);
+                    return Ok(());
+                }
+            }
+
+            panic!("write_read is called with unknown register {}", write);
+        }
+    }
+
+    impl MockUbloxI2C {
+        const ADDRESS: u8 = 0x42;
+        fn new(buf: Vec<Vec<u8>>) -> Self {
+            Self { buf }
+        }
+
+        fn next_avail_data(&self) -> Option<Vec<u8>> {
+            if buf.len() > 0 { Some(buf[0]) } else { None }
+        }
+
+        fn read_n_bytes(&mut self, n_bytes: usize) -> &[u8] {
+            let data = &self.buf[0];
+            let remaining = data.split_off(n_bytes);
+            self.buf[0] = remaining;
+            return data.as_slice();
+        }
+    }
+
+    #[test]
+    fn test_happy_nmea_path() {
+        let responses = vec![
+            // GGA - Global Positioning System Fix Data
+            b"$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\r\n".to_vec(),
+            // RMC - Recommended Minimum Navigation Information
+            b"$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A\r\n".to_vec(),
+            // GSA - GPS DOP and active satellites
+            b"$GPGSA,A,3,04,05,,09,12,,,24,,,,,2.5,1.3,2.1*39\r\n".to_vec(),
+            // GSV - Satellites in view
+            b"$GPGSV,2,1,08,01,40,083,46,02,17,308,41,12,07,344,39,14,22,228,45*75\r\n".to_vec(),
+            // VTG - Track made good and ground speed
+            b"$GPVTG,054.7,T,034.4,M,005.5,N,010.2,K*48\r\n".to_vec(),
+            // GLL - Geographic position, latitude / longitude
+            b"$GPGLL,4916.45,N,12311.12,W,225444,A*1D\r\n".to_vec(),
+        ];
+        let mock_i2c = MockUbloxI2C::new(responses);
+        let rt_ctx = RuntimeContext::new();
+        let mut worker = UbloxPublisher::new(mock_i2c, &rt_ctx);
+        let mut nmea_listener = rt_ctx.nmea_bcast_channel.subscriber().unwrap();
+        let mut gps_listener = rt_ctx.gps_broadcast_channel.subscriber().unwrap();
+
+        let res = embassy_futures::block_on(worker.do_work());
+        assert_matches!(res, Ok(true));
+
+        let message = nmea_listener.try_next_message();
+        assert_matches!(message, Some(embassy_sync::pubsub::WaitResult::Message));
+        let Some(embassy_sync::pubsub::WaitResult::Message(content)) = message else {
+            panic!("Test failed")
+        };
+        assert_eq!(
+            content,
+            b"$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\r\n".to_vec(),
+        );
+    }
+}
