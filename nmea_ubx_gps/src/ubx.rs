@@ -25,6 +25,7 @@ pub fn config_sam_m10q_i2c(buf: &mut Vec<u8>) {
             MsgOutNmeaIdGsvI2c(0),
             MsgOutNmeaIdVtgI2c(0),
             MsgOutUbxNavPvtI2c(1),
+            TpTp1Ena(false),
             TxReadyEnabled(true),
             TxReadyInterface(TxReadyIFace::I2C),
             TxReadyPin(4),

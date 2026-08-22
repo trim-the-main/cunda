@@ -54,7 +54,7 @@ pub struct UbloxPublisher<'a, I2C> {
 }
 
 impl<'a, I2C: I2cTrait> UbloxPublisher<'a, I2C> {
-    const BUF_SIZE: usize = 2048;
+    const BUF_SIZE: usize = 512;
 
     pub fn new(i2c: I2C, rt_ctxt: &'a RuntimeContext) -> Self {
         let nmea_publisher = rt_ctxt.nmea_bcast_channel.publisher().unwrap();
@@ -168,6 +168,8 @@ impl<'a, I2C: I2cTrait> UbloxPublisher<'a, I2C> {
 
         if data.is_empty() {
             return Ok(false);
+        } else {
+            defmt::trace!("Got {} bytes", data.len());
         }
 
         let mut processed_bytes: usize = 0;

@@ -8,6 +8,7 @@
 #![deny(clippy::large_stack_frames)]
 
 use embassy_executor::Spawner;
+use embassy_futures::select::{Either, select};
 use embassy_time::{Duration, Instant, Timer};
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
@@ -90,8 +91,9 @@ async fn main(spawner: Spawner) -> ! {
             executor.run(|spawner| {
                 static I2C_BUS: StaticCell<Mutex<I2CType>> = StaticCell::new();
                 let i2c_bus = SharedI2C::new(I2C_BUS.init(Mutex::new(i2c.into_async())));
+                let tx_ready_pin = Input::new(peripherals.GPIO27, InputConfig::default());
                 spawner.spawn(
-                    ublox_gps_worker(i2c_bus.clone(), rt_ctxt)
+                    ublox_gps_worker(i2c_bus.clone(), tx_ready_pin, rt_ctxt)
                         .expect("Failed to spawn ublox_gps_worker"),
                 );
 
@@ -123,8 +125,12 @@ async fn main(spawner: Spawner) -> ! {
 }
 
 #[embassy_executor::task]
-async fn ublox_gps_worker(i2c: SharedI2C<'static, I2CType>, rt_ctxt: &'static RuntimeContext) {
-    const READ_DELAY: u64 = 500;
+async fn ublox_gps_worker(
+    i2c: SharedI2C<'static, I2CType>,
+    mut data_ready_pin: Input<'static>,
+    rt_ctxt: &'static RuntimeContext,
+) {
+    const READ_DELAY: u64 = 1100;
     defmt::info!("ublox pub worker has started");
 
     let mut ublox_publisher = UbloxPublisher::new(i2c, rt_ctxt);
@@ -148,7 +154,19 @@ async fn ublox_gps_worker(i2c: SharedI2C<'static, I2CType>, rt_ctxt: &'static Ru
         }
         defmt::trace!("ublox publisher worked for {:?}\n", t_driver_work);
         if t_driver_work.as_millis() < READ_DELAY {
-            Timer::after_millis(READ_DELAY - t_driver_work.as_millis()).await;
+            match select(
+                data_ready_pin.wait_for_high(),
+                Timer::after_millis(READ_DELAY - t_driver_work.as_millis()),
+            )
+            .await
+            {
+                Either::First(_) => {
+                    defmt::trace!("Waking up from the txready signal")
+                }
+                Either::Second(_) => {
+                    defmt::trace!("Waking up from timer")
+                }
+            }
         } else {
             defmt::warn!("ublox worker is lagging behind, it cannot sleep");
         }
