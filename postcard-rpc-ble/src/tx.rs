@@ -90,6 +90,7 @@ impl<'storage, 'stack, 'server, const BUFFER_SIZE: usize>
             buffer: &storage.tx_buffer,
         }
     }
+
     pub async fn get_current_mtu(&self) -> Option<u16> {
         let guard = self.gatt_conn.read().await;
         let Some(ref conn) = *guard else {

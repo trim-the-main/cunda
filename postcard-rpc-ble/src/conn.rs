@@ -34,6 +34,7 @@ where
             dispatcher_channel: storage.rx_channel.sender(),
         }
     }
+
     /// Bind a new BLE connection. Call after advertising succeeds.
     pub async fn on_connected(
         &mut self,
