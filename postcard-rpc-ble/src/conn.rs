@@ -78,6 +78,9 @@ where
     ) -> Result<(), WireRxErrorKind> {
         let rx_not_acked_handle = self.server.rpc_service.rx_not_acked.handle;
         let rx_acked_handle = self.server.rpc_service.rx_acked.handle;
+        let tx_not_acked_handle = self.server.rpc_service.tx_not_acked.handle;
+        let tx_acked_handle = self.server.rpc_service.tx_acked.handle;
+
         let dispatcher_channel = self.dispatcher_channel;
         loop {
             match gatt_conn.next().await {
@@ -158,6 +161,18 @@ where
                             );
                             dispatcher_channel.send(write_event).await;
                             return Ok(());
+                        }
+                        if write_event.handle() == tx_acked_handle + 1  // enabling notifications happen in N+1
+                            || write_event.handle() == tx_not_acked_handle + 1
+                        {
+                            defmt::info!(
+                                "Received write to a CCCD to enable/disable notifications {} {}",
+                                write_event.handle(),
+                                write_event.data(),
+                            );
+                            if let Err(err) = write_event.accept() {
+                                defmt::error!("Error accepting setting notifications {}", err);
+                            }
                         } else {
                             defmt::warn!(
                                 "Unexpected GattEvent::Write received at {} instead of {} or {}",
