@@ -1,6 +1,7 @@
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/devices/demo_esp32.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/devices/fake_dev.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/devices/nokta.dart';
+import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/devices/tirbod.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/rpc.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common.dart';
 import 'package:cunda_flutter/frb_generated/rust_lib_cunda_flutter/third_party/protocol/cunda_common/v1/endpoints.dart';
@@ -49,6 +50,9 @@ FutureOr<(DeviceId, Object)> deviceIdProtocolClientPair(
     protocolClient = DemoV1Client(base: base);
   } else if ((deviceId.deviceType, deviceId.protocolVersion) ==
       (NoktaV1Client.cundaDeviceType(), NoktaV1Client.cundaRpcProtocol())) {
+    protocolClient = NoktaV1Client(base: base);
+  } else if ((deviceId.deviceType, deviceId.protocolVersion) ==
+      (TirbodV1Client.cundaDeviceType(), TirbodV1Client.cundaRpcProtocol())) {
     protocolClient = NoktaV1Client(base: base);
   } else if ((deviceId.deviceType, deviceId.protocolVersion) ==
       (FakeDevV1Client.cundaDeviceType(), FakeDevV1Client.cundaRpcProtocol())) {
